@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Owner – Add Stocks (No Build)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <div class="brand">Owner Panel</div>
+      <div>
+        <button class="btn" onclick="history.back()">Back</button>
+        <button class="btn primary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Add stocks</h2>
+      <div class="grid">
+        <label>Product
+          <select id="product_key">
+            <option>netflix</option><option>viu</option><option>disney+</option>
+            <option>amazon</option><option>spotify</option>
+          </select>
+        </label>
+        <label>Account type
+          <select id="account_type"><option>shared profile</option><option>full access</option></select>
+        </label>
+        <label>Duration (months)
+          <select id="duration"><option>1</option><option>3</option><option>6</option><option>12</option></select>
+        </label>
+        <label>Quantity <input id="qty" type="number" value="1"></label>
+
+        <label>Email (optional) <input id="email"></label>
+        <label>Password (optional) <input id="password"></label>
+        <label>Profile (optional) <input id="profile"></label>
+        <label>PIN (optional) <input id="pin"></label>
+        <label style="grid-column:1/-1">Notes (optional) <input id="notes"></label>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn primary" id="saveBtn">Add Stock</button>
+        <span id="msg" style="margin-left:10px;"></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const msg = document.getElementById('msg');
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) location.replace('./login.html?next=/owner.html');
+
+    document.getElementById('logoutBtn').onclick = async () => {
+      await sb.auth.signOut();
+      location.href = './login.html?next=/owner.html';
+    };
+
+    document.getElementById('saveBtn').onclick = async () => {
+      msg.textContent = 'Saving...';
+      const payload = {
+        product_key: document.getElementById('product_key').value,
+        account_type: document.getElementById('account_type').value,
+        duration_months: Number(document.getElementById('duration').value),
+        quantity: Number(document.getElementById('qty').value) || 1,
+        email: document.getElementById('email').value || null,
+        password: document.getElementById('password').value || null,
+        profile: document.getElementById('profile').value || null,
+        pin: document.getElementById('pin').value || null,
+        notes: document.getElementById('notes').value || null,
+      };
+      payload.expires_at = new Date(Date.now() + payload.duration_months*30*24*3600*1000).toISOString().slice(0,10);
+
+      const { error } = await sb.from('stocks').insert(payload);
+      if (error) { msg.textContent = ''; alert(error.message); return; }
+      msg.textContent = 'Added!';
+      document.getElementById('qty').value = '1';
+    };
+  </script>
+</body>
+</html>
