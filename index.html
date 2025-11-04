@@ -1,86 +1,130 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Owner – Add Stocks (No Build)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Owner Panel · Stocks</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Supabase JS v2 from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- your config -->
+  <script src="config.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hdr">
-      <div class="brand">Owner Panel</div>
-      <div>
+  <div class="container">
+    <div class="card">
+      <h1>Owner Panel</h1>
+      <div class="pills">
         <button class="btn" onclick="history.back()">Back</button>
-        <button class="btn primary" id="logoutBtn">Logout</button>
+        <button class="btn primary" onclick="reloadStocks()">Refresh</button>
       </div>
+
+      <form id="stockForm" onsubmit="return saveStock(event)">
+        <div class="grid">
+          <div>
+            <label>Service</label>
+            <input id="service" placeholder="netflix / viu / etc" required>
+          </div>
+          <div>
+            <label>Account type</label>
+            <select id="account_type">
+              <option value="shared profile">shared profile</option>
+              <option value="private">private</option>
+            </select>
+          </div>
+          <div>
+            <label>Duration (months)</label>
+            <select id="duration_months">
+              <option>1</option><option>3</option><option>6</option><option>12</option>
+            </select>
+          </div>
+          <div>
+            <label>Quantity</label>
+            <input id="quantity" type="number" min="0" step="1" value="1" required>
+          </div>
+          <div>
+            <label>Email (optional)</label>
+            <input id="email" placeholder="email (optional)">
+          </div>
+          <div>
+            <label>Password (optional)</label>
+            <input id="password" placeholder="password (optional)">
+          </div>
+          <div>
+            <label>PIN (optional)</label>
+            <input id="pin" placeholder="pin (optional)">
+          </div>
+          <div>
+            <label>Notes</label>
+            <input id="notes" placeholder="notes (optional)">
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn primary" type="submit">Save</button>
+        </div>
+      </form>
     </div>
 
-    <div class="card">
-      <h2>Add stocks</h2>
-      <div class="grid">
-        <label>Product
-          <select id="product_key">
-            <option>netflix</option><option>viu</option><option>disney+</option>
-            <option>amazon</option><option>spotify</option>
-          </select>
-        </label>
-        <label>Account type
-          <select id="account_type"><option>shared profile</option><option>full access</option></select>
-        </label>
-        <label>Duration (months)
-          <select id="duration"><option>1</option><option>3</option><option>6</option><option>12</option></select>
-        </label>
-        <label>Quantity <input id="qty" type="number" value="1"></label>
-
-        <label>Email (optional) <input id="email"></label>
-        <label>Password (optional) <input id="password"></label>
-        <label>Profile (optional) <input id="profile"></label>
-        <label>PIN (optional) <input id="pin"></label>
-        <label style="grid-column:1/-1">Notes (optional) <input id="notes"></label>
-      </div>
-      <div style="margin-top:12px">
-        <button class="btn primary" id="saveBtn">Add Stock</button>
-        <span id="msg" style="margin-left:10px;"></span>
-      </div>
+    <div class="card" style="margin-top:16px">
+      <h2 style="margin:0 0 8px">Stocks <span id="count" class="badge">0</span></h2>
+      <table class="table" id="table">
+        <thead>
+          <tr>
+            <th>Service</th><th>Type</th><th>Months</th><th>Qty</th><th>Email</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
   </div>
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-    import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+<script>
+  // Init supabase
+  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const msg = document.getElementById('msg');
-
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) location.replace('./login.html?next=/owner.html');
-
-    document.getElementById('logoutBtn').onclick = async () => {
-      await sb.auth.signOut();
-      location.href = './login.html?next=/owner.html';
+  async function saveStock(e){
+    e.preventDefault();
+    const payload = {
+      service:         document.getElementById('service').value.trim(),
+      account_type:    document.getElementById('account_type').value,
+      duration_months: parseInt(document.getElementById('duration_months').value, 10),
+      quantity:        parseInt(document.getElementById('quantity').value, 10) || 0,
+      email:           document.getElementById('email').value.trim() || null,
+      password:        document.getElementById('password').value || null,
+      pin:             document.getElementById('pin').value || null,
+      notes:           document.getElementById('notes').value || null
     };
 
-    document.getElementById('saveBtn').onclick = async () => {
-      msg.textContent = 'Saving...';
-      const payload = {
-        product_key: document.getElementById('product_key').value,
-        account_type: document.getElementById('account_type').value,
-        duration_months: Number(document.getElementById('duration').value),
-        quantity: Number(document.getElementById('qty').value) || 1,
-        email: document.getElementById('email').value || null,
-        password: document.getElementById('password').value || null,
-        profile: document.getElementById('profile').value || null,
-        pin: document.getElementById('pin').value || null,
-        notes: document.getElementById('notes').value || null,
-      };
-      payload.expires_at = new Date(Date.now() + payload.duration_months*30*24*3600*1000).toISOString().slice(0,10);
+    const { error } = await supabase.from('stocks').insert(payload);
+    if(error){ alert(error.message); return;}
+    // Clear
+    document.getElementById('stockForm').reset();
+    document.getElementById('quantity').value = 1;
+    await reloadStocks();
+  }
 
-      const { error } = await sb.from('stocks').insert(payload);
-      if (error) { msg.textContent = ''; alert(error.message); return; }
-      msg.textContent = 'Added!';
-      document.getElementById('qty').value = '1';
-    };
-  </script>
+  async function reloadStocks(){
+    const { data, error } = await supabase.from('stocks')
+      .select('*').order('created_at',{ascending:false}).limit(100);
+    if(error){ alert(error.message); return; }
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    data.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.service}</td>
+        <td>${r.account_type}</td>
+        <td>${r.duration_months}</td>
+        <td>${r.quantity}</td>
+        <td>${r.email ?? ''}</td>
+        <td>${new Date(r.created_at).toLocaleString()}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('count').textContent = data.length;
+  }
+
+  reloadStocks();
+</script>
 </body>
 </html>
