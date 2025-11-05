@@ -36,7 +36,14 @@ function toCSV(rows){
   const lines = rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','));
   return [head, ...lines].join('\n');
 }
-
+// map duration code -> label
+function durationLabel(code){
+  if(!code) return '';
+  if(code === 'auto') return 'auto-renew';
+  if(/^\d+d$/.test(code)) return code.replace('d',' days');
+  if(/^\d+m$/.test(code)) return code.replace('m',' months');
+  return code;
+}
 // ---- durations & account types (including your extra choices)
 const ACCOUNT_TYPES = [
   'shared profile','solo profile','shared account','solo account','invitation','head','edu'
