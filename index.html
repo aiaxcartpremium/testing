@@ -1,36 +1,47 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>AiaStocks Management — Home</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script defer src="config.js"></script>
-  <script defer src="common.js"></script>
-  <script defer src="catalog.js"></script>
-</head>
-<body>
-  <header><h1>AiaStocks</h1><nav>
-    <a href="login.html" id="loginLink">Login</a>
-    <button id="logoutBtn" class="hide">Logout</button>
-  </nav></header>
-  <main>
-    <section class="card">
-      <h2>Panels</h2>
-      <div class="links">
-        <a class="btn" href="owner.html">Owner Panel</a>
-        <a class="btn" href="admin.html">Admin Panel</a>
+<!doctype html><html><head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Login • Aiax Stocks</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head><body>
+<div class="container">
+  <div class="card grid">
+    <h1>Sign in</h1>
+    <p class="small">Use the email/password accounts you created in Supabase Auth. After login you'll be routed to your panel based on <code>profiles.role</code>.</p>
+    <div class="grid grid-2">
+      <div>
+        <label>Email</label>
+        <input id="email" type="email" placeholder="you@example.com">
       </div>
-      <p class="muted">Static build for GitHub Pages • Supabase Auth + RLS.</p>
-    </section>
-  </main>
-  <script>
-    document.getElementById('logoutBtn').onclick = logout;
-    onAuthChange((s)=>{
-      document.getElementById('logoutBtn').classList.toggle('hide', !s);
-      document.getElementById('loginLink').classList.toggle('hide', !!s);
-    });
-  </script>
-</body>
-</html>
+      <div>
+        <label>Password</label>
+        <input id="password" type="password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button id="btnLogin">Login</button>
+    </div>
+    <div id="msg" class="small"></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+async function routeByRole(userId){
+  const { data, error } = await sb.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if(error||!data){ document.getElementById('msg').textContent = error?.message || 'No profile/role found'; return; }
+  if(data.role==='owner') location.href='owner.html';
+  else if(data.role==='admin') location.href='admin.html';
+  else document.getElementById('msg').textContent='Unknown role: '+data.role;
+}
+document.getElementById('btnLogin').onclick = async () => {
+  const email = email.value.trim(), pwd = password.value;
+  document.getElementById('msg').textContent='Signing in...';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  if(error){ document.getElementById('msg').textContent=error.message; return; }
+  routeByRole(data.user.id);
+};
+// already logged in?
+sb.auth.getSession().then(({data})=>{ if(data.session) routeByRole(data.session.user.id) });
+</script>
+</body></html>
