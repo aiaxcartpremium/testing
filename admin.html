@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script defer src="config.js"></script>
+  <script defer src="catalog.js"></script>
+  <script defer src="common.js"></script>
+  <script defer src="admin.js"></script>
+</head>
+<body>
+<header><h1>Admin Panel</h1><nav>
+  <a href="index.html">Home</a>
+  <button id="logoutBtn">Logout</button>
+</nav></header>
+<main>
+  <section class="card">
+    <h2>Available Counts</h2>
+    <div class="grid3">
+      <select id="filterProduct"></select>
+      <select id="filterType">
+        <option value="">all account types</option>
+        <option>shared profile</option><option>solo profile</option>
+        <option>shared account</option><option>solo account</option>
+      </select>
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+    <table id="countTbl">
+      <thead><tr><th>Product</th><th>Type</th><th>Available</th><th>Sold</th><th>Action</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Get Account</h2>
+    <form id="getForm" class="grid3">
+      <label>Stock ID <input id="stockId" placeholder="UUID from list"/></label>
+      <label>Buyer Social <input id="buyerSocial" placeholder="@fb / @tg / link"/></label>
+      <label>Sold Price <input id="soldPrice" type="number" step="0.01" value="0"/></label>
+      <button class="btn" type="submit">Get</button>
+    </form>
+    <pre id="creds" class="well"></pre>
+  </section>
+</main>
+</body>
+</html>
