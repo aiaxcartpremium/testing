@@ -1,135 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Owner Panel · Stocks</title>
-  <link rel="stylesheet" href="style.css">
-  <!-- Supabase JS v2 from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- your config -->
-  <script src="config.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>AiaStocks Management — Home</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script defer src="config.js"></script>
+  <script defer src="common.js"></script>
+  <script defer src="catalog.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <h1>Owner Panel</h1>
-      <div class="pills">
-        <button class="btn" onclick="history.back()">Back</button>
-        <button class="btn primary" onclick="reloadStocks()">Refresh</button>
+  <header><h1>AiaStocks</h1><nav>
+    <a href="login.html" id="loginLink">Login</a>
+    <button id="logoutBtn" class="hide">Logout</button>
+  </nav></header>
+  <main>
+    <section class="card">
+      <h2>Panels</h2>
+      <div class="links">
+        <a class="btn" href="owner.html">Owner Panel</a>
+        <a class="btn" href="admin.html">Admin Panel</a>
       </div>
-
-      <form id="stockForm" onsubmit="return saveStock(event)">
-        <div class="grid">
-          <div>
-            <label>Service</label>
-            <input id="service" placeholder="netflix / viu / etc" required>
-          </div>
-          <div>
-            <label>Account type</label>
-            <select id="account_type">
-              <option value="shared profile">shared profile</option>
-              <option value="private">private</option>
-            </select>
-          </div>
-          <div>
-            <label>Duration (months)</label>
-            <select id="duration_months">
-              <option>1</option><option>3</option><option>6</option><option>12</option>
-            </select>
-          </div>
-          <div>
-            <label>Quantity</label>
-            <input id="quantity" type="number" min="0" step="1" value="1" required>
-          </div>
-          <div>
-            <label>Email</label>
-            <input id="email" placeholder="email">
-          </div>
-          <div>
-            <label>Password</label>
-            <input id="password" placeholder="password">
-          </div>
-          <div>
-          <div>
-            <label>Profile (optional)</label>
-            <input id="profile" placeholder="profile (optional)">
-          </div>
-          <div>
-            <label>PIN (optional)</label>
-            <input id="pin" placeholder="pin (optional)">
-          </div>
-          <div>
-            <label>Notes</label>
-            <input id="notes" placeholder="notes (optional)">
-          </div>
-        </div>
-        <div style="margin-top:12px">
-          <button class="btn primary" type="submit">Save</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <h2 style="margin:0 0 8px">Stocks <span id="count" class="badge">0</span></h2>
-      <table class="table" id="table">
-        <thead>
-          <tr>
-            <th>Service</th><th>Type</th><th>Months</th><th>Qty</th><th>Email</th><th>Created</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-<script>
-  // Init supabase
-  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-
-  async function saveStock(e){
-    e.preventDefault();
-    const payload = {
-      service:         document.getElementById('service').value.trim(),
-      account_type:    document.getElementById('account_type').value,
-      duration_months: parseInt(document.getElementById('duration_months').value, 10),
-      quantity:        parseInt(document.getElementById('quantity').value, 10) || 0,
-      email:           document.getElementById('email').value.trim() || null,
-      password:        document.getElementById('password').value || null,
-      pin:             document.getElementById('pin').value || null,
-      notes:           document.getElementById('notes').value || null
-    };
-
-    const { error } = await supabase.from('stocks').insert(payload);
-    if(error){ alert(error.message); return;}
-    // Clear
-    document.getElementById('stockForm').reset();
-    document.getElementById('quantity').value = 1;
-    await reloadStocks();
-  }
-
-  async function reloadStocks(){
-    const { data, error } = await supabase.from('stocks')
-      .select('*').order('created_at',{ascending:false}).limit(100);
-    if(error){ alert(error.message); return; }
-    const tbody = document.getElementById('tbody');
-    tbody.innerHTML = '';
-    data.forEach(r=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${r.service}</td>
-        <td>${r.account_type}</td>
-        <td>${r.duration_months}</td>
-        <td>${r.quantity}</td>
-        <td>${r.email ?? ''}</td>
-        <td>${new Date(r.created_at).toLocaleString()}</td>
-      `;
-      tbody.appendChild(tr);
+      <p class="muted">Static build for GitHub Pages • Supabase Auth + RLS.</p>
+    </section>
+  </main>
+  <script>
+    document.getElementById('logoutBtn').onclick = logout;
+    onAuthChange((s)=>{
+      document.getElementById('logoutBtn').classList.toggle('hide', !s);
+      document.getElementById('loginLink').classList.toggle('hide', !!s);
     });
-    document.getElementById('count').textContent = data.length;
-  }
-
-  reloadStocks();
-</script>
+  </script>
 </body>
 </html>
