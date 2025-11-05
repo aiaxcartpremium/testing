@@ -2,134 +2,193 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AiaxStock • Owner</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
-  <script src="auth.js"></script>
-</head>
-<body class="pink-bg">
-  <header class="topbar">
-    <div class="brand">AiaxStock Management — <b>Owner</b></div>
-    <nav>
-      <a class="link" href="admin.html">Go to Admin</a>
-      <button class="btn small" onclick="logout()">Logout</button>
-    </nav>
-  </header>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Owner • AiaxStock</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <script type="module">
+    import {
+      getRole, logout, fetchProducts, addStock, listStocks, deleteStock,
+      fetchAllSales, updateSale, addDaysToSale, toCSV, toast
+    } from "./app.js";
+    import { DURATION_MAP } from "./config.js";
 
-  <main class="container">
-    <section class="panel">
-      <h2>Add Stock</h2>
+    if(getRole()!=="owner"){ location.href="./index.html"; }
 
-      <label>Product</label>
-      <select id="product"></select>
-
-      <label>Account type</label>
-      <select id="acct">
-        <option value="shared profile">shared profile</option>
-        <option value="solo profile">solo profile</option>
-        <option value="shared account">shared account</option>
-        <option value="solo account">solo account</option>
-      </select>
-
-      <label>Duration</label>
-      <select id="dur"></select>
-
-      <label>Quantity</label>
-      <input id="qty" type="number" min="1" value="1"/>
-
-      <label>Email (optional)</label>
-      <input id="email" placeholder="login email"/>
-
-      <label>Password (optional)</label>
-      <input id="pass" placeholder="login password"/>
-
-      <label>Profile (optional)</label>
-      <input id="profile" placeholder="profile name"/>
-
-      <label>PIN (optional)</label>
-      <input id="pin" placeholder="profile pin"/>
-
-      <label>Notes</label>
-      <input id="notes" placeholder="any notes"/>
-
-      <button class="btn pink" onclick="addStock()">Add stock</button>
-    </section>
-
-    <section class="panel">
-      <h2>Admin Sales (all)</h2>
-      <div id="owner-sales"></div>
-    </section>
-  </main>
-
-  <script>
-    const s = requireRole(['owner']); if (!s) return;
-    const db = supabase.createClient(APP.url, APP.key);
-
-    const DURS = [
-      7,14,30,60,90,120,150,180,210,240,270,300,330,365
-    ];
-    function fillDurations() {
-      const sel = document.getElementById('dur');
-      sel.innerHTML = DURS.map(d=>`<option value="${d}">${d} days</option>`).join('');
+    function switchTab(id){
+      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p=>p.classList.add("hidden"));
+      document.getElementById("tab-"+id).classList.add("active");
+      document.getElementById("panel-"+id).classList.remove("hidden");
     }
 
-    async function loadProducts() {
-      const { data, error } = await db.from('products')
-        .select('key,label,category').order('category, label');
-      const sel = document.getElementById('product');
-      if (error) { alert(error.message); return; }
-      sel.innerHTML = data.map(p => `<option value="${p.key}">${p.label} • ${p.category}</option>`).join('');
+    async function fillProducts(){
+      const list = await fetchProducts();
+      prod.innerHTML = '<option value="">Select…</option>' +
+        list.map(p=>`<option value="${p.key}">${p.label}</option>`).join('');
     }
 
-    async function addStock() {
-      const body = {
-        owner_id: s.uid,
-        product_key: document.getElementById('product').value,
-        account_type: document.getElementById('acct').value,
-        duration_days: parseInt(document.getElementById('dur').value,10),
-        quantity: parseInt(document.getElementById('qty').value,10),
-        email: document.getElementById('email').value || null,
-        password: document.getElementById('pass').value || null,
-        profile_name: document.getElementById('profile').value || null,
-        pin: document.getElementById('pin').value || null,
-        notes: document.getElementById('notes').value || null
+    async function doAddStock(){
+      const payload = {
+        product_key: prod.value,
+        account_type: acctType.value,
+        duration_days: Number(DURATION_MAP[duration.value]||0),
+        auto_renew: duration.value==='auto',
+        quantity: Number(qty.value||1),
+        email: email.value||null,
+        password: password.value||null,
+        profile_name: profile.value||null,
+        pin: pin.value||null,
+        notes: notes.value||null,
+        expires_at: expires.value ? new Date(expires.value).toISOString() : null
       };
-      const { error } = await db.from('stocks').insert(body);
-      if (error) return alert(error.message);
-      alert('Stock added!');
+      if(!payload.product_key){ toast("Pick product"); return; }
+      await addStock(payload);
+      toast("Stock added");
+      await refreshStocks();
     }
 
-    // (optional) Owner view of all admin sales
-    async function loadOwnerSales() {
-      const { data, error } = await db.from('sales')
-        .select('id,product_key,account_type,admin_id,created_at,expires_at,price,buyer_link')
-        .order('id', { ascending:false })
-        .limit(50);
-      if (error) return;
-      const el = document.getElementById('owner-sales');
-      el.innerHTML = `
-        <table class="tbl">
-          <thead><tr>
-            <th>ID</th><th>Product</th><th>Type</th><th>Admin</th>
-            <th>Created</th><th>Expires</th><th>Price</th><th>Buyer</th>
-          </tr></thead>
-          <tbody>
-            ${(data||[]).map(r=>`
-              <tr>
-                <td>${r.id}</td><td>${r.product_key}</td><td>${r.account_type}</td><td>${r.admin_id}</td>
-                <td>${new Date(r.created_at).toLocaleString()}</td>
-                <td>${new Date(r.expires_at).toLocaleString()}</td>
-                <td>${r.price ?? ''}</td><td>${r.buyer_link ?? ''}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
+    async function refreshStocks(){
+      const rows = await listStocks();
+      stocksBody.innerHTML = rows.map(r=>`
+        <tr>
+          <td>${r.id}</td>
+          <td>${r.product_key}</td>
+          <td>${r.account_type}</td>
+          <td>${r.quantity}</td>
+          <td>${r.duration_days}${r.auto_renew?' (auto)':''}</td>
+          <td>${r.profile_name||''}</td>
+          <td>${r.pin||''}</td>
+          <td>${r.email||''}</td>
+          <td>${r.expires_at? new Date(r.expires_at).toLocaleDateString(): ''}</td>
+          <td>
+            <button class="btn small secondary" onclick="removeStock(${r.id})">Remove</button>
+          </td>
+        </tr>`).join("");
     }
+    window.removeStock = async (id)=>{
+      if(!confirm("Delete this stock row?")) return;
+      await deleteStock(id); toast("Deleted"); await refreshStocks();
+    };
 
-    fillDurations();
-    loadProducts();
-    // loadOwnerSales(); // keep if you want an owner-wide sales table
+    async function refreshRecords(){
+      const rows = await fetchAllSales();
+      salesBody.innerHTML = rows.map(r=>`
+        <tr>
+          <td>${r.id}</td>
+          <td><input value="${r.product_key||''}" data-id="${r.id}" data-k="product_key"/></td>
+          <td><input value="${r.account_type||''}" data-id="${r.id}" data-k="account_type"/></td>
+          <td><input value="${r.email||''}" data-id="${r.id}" data-k="email"/></td>
+          <td><input value="${r.password||''}" data-id="${r.id}" data-k="password"/></td>
+          <td><input value="${r.profile_name||''}" data-id="${r.id}" data-k="profile_name"/></td>
+          <td><input value="${r.pin||''}" data-id="${r.id}" data-k="pin"/></td>
+          <td><input value="${r.buyer_link||''}" data-id="${r.id}" data-k="buyer_link"/></td>
+          <td><input value="${r.price||''}" data-id="${r.id}" data-k="price"/></td>
+          <td>${new Date(r.created_at).toLocaleString()}</td>
+          <td>${r.expires_at? new Date(r.expires_at).toLocaleDateString():''}</td>
+          <td>
+            <input type="number" min="1" placeholder="days" id="add-${r.id}" style="width:80px"/>
+            <button class="btn small" onclick="addDays(${r.id})">+Days</button>
+            <button class="btn small" onclick="saveRow(${r.id})">Save</button>
+          </td>
+        </tr>`).join("");
+    }
+    window.saveRow = async (id)=>{
+      const inputs = [...document.querySelectorAll(`[data-id="${id}"]`)];
+      const patch = {}; inputs.forEach(i => patch[i.dataset.k] = i.value);
+      await updateSale(id, patch); toast("Saved");
+    };
+    window.addDays = async (id)=>{
+      const v = Number(document.getElementById("add-"+id).value||0);
+      if(!v) return; await addDaysToSale(id, v); toast("+Days applied"); await refreshRecords();
+    };
+    window.exportCSV = async ()=>{
+      const rows = await fetchAllSales();
+      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
+      const url = URL.createObjectURL(blob); const a=document.createElement("a");
+      a.href=url; a.download="owner-sales.csv"; a.click(); URL.revokeObjectURL(url);
+    };
+
+    window.switchTab = switchTab;
+    window.logout = logout;
+    window.onload = async ()=>{ await fillProducts(); await refreshStocks(); await refreshRecords(); };
   </script>
+</head>
+<body>
+  <div class="nav"><div class="nav-inner container">
+    <div class="brand">AiaxStock — Owner</div>
+    <div class="toolbar">
+      <!-- (owner can see Admin, but Admin page no longer links back here) -->
+      <a class="link" href="./admin.html">Go to Admin</a>
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div></div>
+
+  <div class="container">
+    <div class="tabs">
+      <button id="tab-add"    class="tab active" onclick="switchTab('add')">Add Stock</button>
+      <button id="tab-stocks" class="tab"        onclick="switchTab('stocks')">Stocks</button>
+      <button id="tab-records"class="tab"        onclick="switchTab('records')">Records</button>
+    </div>
+
+    <!-- Add Stock -->
+    <section id="panel-add" class="panel card">
+      <h2>Add Stock</h2>
+      <div class="grid two">
+        <div><label>Product</label><select id="prod"></select></div>
+        <div><label>Account type</label>
+          <select id="acctType">
+            <option>shared profile</option><option>solo profile</option>
+            <option>shared account</option><option>solo account</option>
+          </select>
+        </div>
+        <div><label>Duration</label>
+          <select id="duration">
+            <option value="7d">7 days</option><option value="14d">14 days</option>
+            <option value="1m">1 month</option><option value="2m">2 months</option>
+            <option value="3m">3 months</option><option value="6m">6 months</option>
+            <option value="12m">12 months</option><option value="auto">Auto-renew</option>
+          </select>
+        </div>
+        <div><label>Quantity</label><input id="qty" type="number" value="1" min="1"/></div>
+        <div><label>Email (optional)</label><input id="email" placeholder="login email"/></div>
+        <div><label>Password (optional)</label><input id="password" placeholder="login password"/></div>
+        <div><label>Profile (optional)</label><input id="profile" placeholder="profile name"/></div>
+        <div><label>PIN (optional)</label><input id="pin" placeholder="profile pin"/></div>
+        <div><label>Expiry date (optional)</label><input id="expires" type="datetime-local"/></div>
+        <div><label>Notes</label><input id="notes" placeholder="any notes"/></div>
+      </div>
+      <div class="toolbar"><button class="btn" onclick="doAddStock()">Add stock</button></div>
+    </section>
+
+    <!-- Stocks -->
+    <section id="panel-stocks" class="panel card hidden">
+      <div class="toolbar"><h2>Stocks</h2><button class="btn small" onclick="location.reload()">Refresh</button></div>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Qty</th><th>Duration</th><th>Profile</th><th>PIN</th><th>Email</th><th>Expires</th><th>Actions</th></tr></thead>
+        <tbody id="stocksBody"></tbody>
+      </table>
+    </section>
+
+    <!-- Records -->
+    <section id="panel-records" class="panel card hidden">
+      <div class="toolbar">
+        <h2>Sales Records</h2>
+        <div>
+          <button class="btn small" onclick="location.reload()">Refresh</button>
+          <button class="btn small secondary" onclick="exportCSV()">Export CSV</button>
+        </div>
+      </div>
+      <table class="table">
+        <thead><tr>
+          <th>ID</th><th>Product</th><th>Type</th><th>Email</th><th>Password</th>
+          <th>Profile</th><th>PIN</th><th>Buyer link</th><th>Price</th>
+          <th>Created</th><th>Expires</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="salesBody"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
 </body>
 </html>
