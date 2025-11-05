@@ -1,86 +1,205 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin Panel</title>
-<link rel="stylesheet" href="style.css"/>
-<script src="config.js"></script>
-<script src="app.js"></script>
-<script src="./common.js"></script>
-<script>
-  requireRole(['admin','owner']); // allow owner to view admin panel
-  renderNav('topNav');
-</script>
-</head><body>
-  <div id="topNav"></div>
-<div class="container">
-  <div class="topbar">
-    <a href="owner.html">Go to Owner (test)</a>
-    <div><button class="btn-outline" onclick="logout()">Logout</button></div>
-  </div>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AiaxStock • Admin</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <style>
+    :root{--ink:#1f1f1f;--muted:#60606a;--line:#ece4ea;--accent:#ffb3c6}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#fff}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+    .brand{font-weight:800;color:#8a1049}
+    .row{display:flex;gap:16px;flex-wrap:wrap;padding:16px}
+    .card{flex:1 1 460px;min-width:320px;border:1px solid var(--line);border-radius:14px;padding:16px}
+    .title{margin:0 0 8px 0;font-size:18px}
+    select,input,button,textarea{width:100%;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font-size:15px}
+    button{background:linear-gradient(180deg,#ffe6ee,#ffc2d1);border-color:var(--accent);color:#8a1049;font-weight:800;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+    th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#f7eef2;border:1px solid var(--line);font-size:12px}
+    .muted{color:var(--muted)}
+    .link{color:#0b6bfd;text-decoration:none}
+    .hide{display:none!important}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">AiaxStock Management — Admin</div>
+  <nav style="display:flex;gap:8px;align-items:center">
+    <a id="toOwner" class="link hide" href="./owner.html">Go to Owner</a>
+    <button onclick="logout()">Logout</button>
+  </nav>
+</header>
 
-  <div class="card">
-    <h1>Admin • Available Stocks</h1>
-    <div class="row">
-      <select id="durationSelect"></select>
+<div class="row">
+  <section class="card">
+    <h3 class="title">Get Account</h3>
+    <label>Product</label>
+    <select id="product"></select>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="flex:1">
+        <label>Account type</label>
+        <select id="accType">
+          <option>shared profile</option>
+          <option>solo profile</option>
+          <option>shared account</option>
+          <option>solo account</option>
+        </select>
+      </div>
+      <div style="flex:1">
+        <label>Duration</label>
+        <select id="duration">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30">1 month</option>
+          <option value="60">2 months</option>
+          <option value="90">3 months</option>
+          <option value="120">4 months</option>
+          <option value="150">5 months</option>
+          <option value="180">6 months</option>
+          <option value="210">7 months</option>
+          <option value="240">8 months</option>
+          <option value="270">9 months</option>
+          <option value="300">10 months</option>
+          <option value="330">11 months</option>
+          <option value="360">12 months</option>
+        </select>
+      </div>
     </div>
-    <table>
-      <thead>
-        <tr><th>Product</th><th>Type</th><th>Qty</th><th style="text-align:right">Action</th></tr>
-      </thead>
-      <tbody id="adminStockTbody"></tbody>
-    </table>
-  </div>
 
-  <div class="card" id="lastBox" style="display:none">
-    <h1>Last Provided Credentials</h1>
-    <div id="creds"></div>
-    <div style="margin-top:10px"><button class="btn-outline" onclick="copyCreds()">Copy creds</button></div>
-  </div>
+    <button style="margin-top:12px" onclick="getAccount()">Get Account</button>
+
+    <div id="acctBox" class="hide" style="margin-top:12px">
+      <div class="pill" id="acctHeader"></div>
+      <pre id="acctCreds" style="white-space:pre-wrap;background:#f9f6f7;border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0 0 0"></pre>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3 class="title">My Buyers Record</h3>
+    <div class="muted" id="salesHint">Showing sales created by <span id="me"></span></div>
+    <table id="salesTbl">
+      <thead>
+        <tr>
+          <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th><th>Save</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
 </div>
 
 <script>
-  const u = requireRole(['admin']);
-  fillDuration(document.getElementById('durationSelect'));
+  // ----- Session / Guard -----
+  const role = localStorage.getItem('role');
+  const uid  = localStorage.getItem('user_id');
+  if(!role || !uid) location.replace('./index.html');
+  // admin page: allow owner or admin; show "Go to Owner" only for owner
+  if(role === 'owner'){ document.getElementById('toOwner').classList.remove('hide'); }
+  else if(role !== 'admin'){ alert('Not allowed.'); location.replace('./index.html'); }
 
-  function renderAdminTable(rows){
-    const tb = document.getElementById('adminStockTbody');
-    tb.innerHTML = "";
-    rows.forEach(r=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${r.product_label||r.product_key}</td>
-        <td>${r.account_type}</td>
-        <td style="text-align:right">${r.total_qty}</td>
-        <td style="text-align:right">
-          <button class="btn-xs" data-product="${r.product_key}" data-type="${r.account_type}">Get Account</button>
-        </td>
-      `;
-      tb.appendChild(tr);
+  // ----- Supabase -----
+  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+  // ----- UI helpers -----
+  function logout(){ localStorage.clear(); location.replace('./index.html'); }
+  function opt(el, val, txt){ const o=document.createElement('option'); o.value=val; o.textContent=txt; el.appendChild(o); }
+
+  // ----- Load products into dropdown -----
+  async function loadProducts(){
+    const sel = document.getElementById('product');
+    sel.innerHTML = '';
+    const { data, error } = await supabase.from('products').select('key,label,category').order('category').order('label');
+    if(error){ alert('Load products error: '+error.message); return; }
+    data.forEach(p => opt(sel, p.key, `${p.category} • ${p.label}`));
+  }
+
+  // ----- Get Account (RPC) -----
+  async function getAccount(){
+    const product_key = document.getElementById('product').value;
+    const account_type = document.getElementById('accType').value;
+    const duration_days = parseInt(document.getElementById('duration').value, 10);
+    if(!product_key) return alert('Select a product.');
+
+    // adjust arg names if iba ang signature ng function mo
+    const { data, error } = await supabase.rpc('get_account', {
+      admin_id: uid,
+      product_key,
+      account_type,
+      duration_days
     });
+
+    if(error){ alert('get_account failed: '+error.message); return; }
+
+    // Expecting returned row with credentials + expires_at
+    const box = document.getElementById('acctBox');
+    document.getElementById('acctHeader').textContent = `${product_key} • ${account_type}`;
+    document.getElementById('acctCreds').textContent =
+      `Email: ${data?.email ?? '—'}\nPassword: ${data?.password ?? '—'}\nProfile: ${data?.profile_name ?? '—'}\nPIN: ${data?.pin ?? '—'}\nExpires: ${data?.expires_at ?? '—'}`;
+    box.classList.remove('hide');
+
+    // refresh buyers table because a new sale was created by RPC
+    listSales();
   }
 
-  document.getElementById('adminStockTbody').addEventListener('click', async (e)=>{
-    if(e.target.tagName === 'BUTTON'){
-      const product_key = e.target.dataset.product;
-      const account_type = e.target.dataset.type;
-      const duration_days = parseInt(document.getElementById('durationSelect').value,10);
-      const res = await adminGetAccount({product_key, account_type, duration_days});
-      if(!res) return;
-      document.getElementById('lastBox').style.display = 'block';
-      document.getElementById('creds').innerText =
-        `Email: ${res.email||''}\nPassword: ${res.password||''}\nProfile: ${res.profile_name||''}\nPIN: ${res.pin||''}\nExpires: ${new Date(res.expires_at).toLocaleString()}\nSale ID: ${res.sale_id}`;
-      await loadStockSummary(document.getElementById('adminStockTbody')).then(renderAdminTable);
+  // ----- List only my sales (admin_id = uid) -----
+  async function listSales(){
+    document.getElementById('me').textContent = uid.slice(0,8)+'…';
+    const tbody = document.querySelector('#salesTbl tbody');
+    tbody.innerHTML = '<tr><td class="muted" colspan="8">Loading…</td></tr>';
+
+    // if may view ka (e.g. sales_admin_view), gamitin mo yun; else direct table with RLS
+    const { data, error } = await supabase
+      .from('sales')
+      .select('id,product_key,account_type,created_at,expires_at,buyer_link,price,admin_id')
+      .eq('admin_id', uid)
+      .order('created_at', { ascending:false })
+      .limit(100);
+
+    if(error){ tbody.innerHTML = `<tr><td colspan="8" class="muted">Error: ${error.message}</td></tr>`; return; }
+
+    if(!data.length){ tbody.innerHTML = '<tr><td class="muted" colspan="8">No records yet.</td></tr>'; return; }
+
+    tbody.innerHTML = '';
+    for(const r of data){
+      const tr = document.createElement('tr');
+
+      tr.innerHTML = `
+        <td>${r.id}</td>
+        <td>${r.product_key}</td>
+        <td>${r.account_type}</td>
+        <td>${new Date(r.created_at).toLocaleString()}</td>
+        <td>${r.expires_at ? new Date(r.expires_at).toLocaleString() : '—'}</td>
+        <td><input data-k="buyer_link" data-id="${r.id}" value="${r.buyer_link ?? ''}" placeholder="@user or link"/></td>
+        <td><input data-k="price" data-id="${r.id}" value="${r.price ?? ''}" placeholder="0.00"/></td>
+        <td><button data-act="save" data-id="${r.id}">Save</button></td>
+      `;
+      tbody.appendChild(tr);
     }
-  });
 
-  function copyCreds(){
-    const t = document.getElementById('creds').innerText;
-    navigator.clipboard.writeText(t);
-    alert('Copied.');
+    // wire save buttons
+    tbody.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('[data-act="save"]'); if(!btn) return;
+      const id = btn.dataset.id;
+      const row = btn.closest('tr');
+      const link = row.querySelector('input[data-k="buyer_link"]').value || null;
+      const price = row.querySelector('input[data-k="price"]').value || null;
+      const { error } = await supabase.from('sales').update({ buyer_link:link, price:price }).eq('id', id).eq('admin_id', uid);
+      if(error) return alert('Update failed: '+error.message);
+      alert('Saved.');
+    }, { once:true }); // avoid multiple bindings per refresh
   }
 
-  (async ()=>{
-    const rows = await loadStockSummary(document.getElementById('adminStockTbody'));
-    renderAdminTable(rows);
+  // ----- Init -----
+  (async function init(){
+    await loadProducts();
+    await listSales();
   })();
 </script>
-</body></html>
+</body>
+</html>
