@@ -1,0 +1,45 @@
+<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Buyer Records</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</head><body>
+<div class="container">
+  <div class="topbar">
+    <a href="owner.html">Owner</a>
+    <a href="admin.html">Admin</a>
+    <button class="btn-outline" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="card">
+    <h1>Buyer Records</h1>
+    <div class="row">
+      <input id="saleId" placeholder="Sale ID"/>
+      <input id="buyer" placeholder="@buyer or link"/>
+      <input id="price" type="number" step="0.01" placeholder="Price"/>
+      <button onclick="save()">Save</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1>Recent Sales</h1>
+    <table>
+      <thead><tr><th>Product</th><th>Type</th><th>Created</th><th>Buyer</th><th>Price</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+  requireRole(['owner','admin']);
+  async function save(){
+    const id = document.getElementById('saleId').value.trim();
+    if(!id) return alert('Sale ID required.');
+    const buyer = document.getElementById('buyer').value.trim();
+    const price = document.getElementById('price').value.trim();
+    await upsertBuyerInfo(id, buyer, price);
+    await listSales(document.getElementById('tb'));
+  }
+  (async ()=>{ await listSales(document.getElementById('tb')); })();
+</script>
+</body></html>
