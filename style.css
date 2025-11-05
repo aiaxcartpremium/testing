@@ -41,3 +41,11 @@ input,select,textarea{width:100%;padding:12px;border-radius:12px;border:1.8px so
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
        background:#111;color:#fff;padding:10px 14px;border-radius:999px;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
+.login-columns{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.login-card{background:#fff; border-radius:20px; padding:20px; box-shadow:0 20px 40px rgba(0,0,0,.08)}
+.login-card h2{margin:0 0 12px}
+.login-card label{display:block; font-weight:600; margin:10px 0 6px}
+.login-card input{width:100%; padding:12px 14px; border-radius:12px; border:2px solid #f2cbd6; outline:none}
+.login-card input:focus{border-color:#ff9fbd}
+.btn-primary{margin-top:14px; width:100%; padding:12px 16px; border:0; border-radius:16px; font-weight:800; cursor:pointer; background:linear-gradient(180deg,#ffb4c9,#ff8db1); color:#4b0a22}
+.btn-primary:active{transform:translateY(1px)}
