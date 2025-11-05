@@ -1,106 +1,85 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Owner • AiaxStock</title>
-  <style>
-    :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
-    .nav{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 18px;background:#fff;box-shadow:var(--shadow)}
-    .brand{font-size:22px;font-weight:900;color:#8a1242}
-    .link{color:#1770ff;font-weight:800;cursor:pointer}
-    .btn{padding:10px 14px;border-radius:10px;border:none;background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;font-weight:800;cursor:pointer}
-    .tabs{display:flex;gap:10px;margin:16px}
-    .tab{padding:10px 14px;border-radius:10px;background:#fff;border:2px solid #ffd1df;cursor:pointer;font-weight:800}
-    .tab.active{background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;border-color:transparent}
-    .card{background:#fff;margin:16px;border-radius:18px;box-shadow:var(--shadow);padding:18px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-    select,input,textarea{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px}
-    .row{display:flex;gap:12px;align-items:flex-end}
-    .table{width:100%;border-collapse:collapse}
-    .table th,.table td{border-bottom:1px solid #f1d8e1;padding:10px}
-    .muted{color:#666}
-    @media(max-width:840px){ .grid{grid-template-columns:1fr} }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Owner • AiaxStock</title>
+<link rel="stylesheet" href="styles.css">
 </head>
-<body id="ownerPage">
-  <div class="nav">
-    <div class="brand">AiaxStock Management — Owner</div>
-    <div class="row">
-      <div class="link" id="goAdmin">Go to Admin</div>
-      <button class="btn" id="btnLogout">Logout</button>
-    </div>
-  </div>
+<body data-page="owner">
+  <header class="topbar">
+    <h2>AiaxStock <span class="muted">Management — Owner</span></h2>
+    <nav>
+      <a id="goAdmin" class="link">Go to Admin</a>
+      <button id="btnLogout" class="ghost">Logout</button>
+    </nav>
+  </header>
 
   <div class="tabs">
-    <div class="tab active" id="tabAdd">Add stock</div>
-    <div class="tab" id="tabStocks">Stocks</div>
-    <div class="tab" id="tabRecords">Records</div>
+    <button class="tab active" id="tabAdd">Add stock</button>
+    <button class="tab" id="tabStocks">Stocks</button>
+    <button class="tab" id="tabRecords">Records</button>
   </div>
 
-  <!-- Add Stock -->
-  <section class="card" id="paneAdd">
-    <h2>Add Stock</h2>
+  <!-- Add -->
+  <section id="paneAdd">
+    <h1>Add Stock</h1>
+
     <form id="addStockForm" class="grid">
-      <div>
-        <label>Product</label>
-        <select id="productSelect"><option disabled selected>Loading…</option></select>
-      </div>
-      <div>
-        <label>Account type</label>
+      <label>Product
+        <select id="productSelect"><option>Loading…</option></select>
+      </label>
+
+      <label>Account type
         <select id="typeSelect"></select>
-      </div>
-      <div>
-        <label>Duration</label>
+      </label>
+
+      <label>Duration
         <select id="durationSelect"></select>
-      </div>
+      </label>
 
-      <div>
-        <label>Quantity</label>
+      <label>Quantity
         <input id="qtyInput" type="number" min="1" value="1"/>
-      </div>
-      <div>
-        <label>Email (optional)</label>
-        <input id="emailInput" placeholder="login email"/>
-      </div>
-      <div>
-        <label>Password (optional)</label>
-        <input id="passInput" placeholder="login password"/>
-      </div>
-      <div>
-        <label>Profile (optional)</label>
-        <input id="profileInput" placeholder="profile name"/>
-      </div>
-      <div>
-        <label>PIN (optional)</label>
-        <input id="pinInput" placeholder="profile pin"/>
-      </div>
-      <div>
-        <label>Notes</label>
-        <input id="notesInput" placeholder="any notes"/>
-      </div>
+      </label>
 
-      <div style="grid-column:1/-1;text-align:right">
+      <label>Email
+        <input id="emailInput" type="text" placeholder="login email"/>
+      </label>
+
+      <label>Password
+        <input id="passInput" type="text" placeholder="login password"/>
+      </label>
+
+      <label>Profile (optional)
+        <input id="profileInput" type="text" placeholder="profile name"/>
+      </label>
+
+      <label>PIN (optional)
+        <input id="pinInput" type="text" placeholder="profile pin"/>
+      </label>
+
+      <label class="full">Notes
+        <input id="notesInput" type="text" placeholder="any notes"/>
+      </label>
+
+      <div class="full right">
         <button class="btn" type="submit">Add stock</button>
       </div>
     </form>
   </section>
 
-  <!-- Stocks summary -->
-  <section class="card" id="paneStocks" style="display:none">
-    <h2>Stocks</h2>
-    <div id="ownerStocksTable">Loading…</div>
+  <!-- Stocks -->
+  <section id="paneStocks" style="display:none">
+    <h1>Stocks</h1>
+    <div id="ownerStocksTable"></div>
   </section>
 
   <!-- Records -->
-  <section class="card" id="paneRecords" style="display:none">
-    <h2>Sales Records</h2>
-    <div id="ownerRecords">Loading…</div>
+  <section id="paneRecords" style="display:none">
+    <h1>Records</h1>
+    <div id="ownerRecords"></div>
   </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>
