@@ -4,28 +4,82 @@
 <title>Login • AiaxStock</title>
 <link rel="preconnect" href="https://esm.sh">
 <style>
-  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --pink4:#FFC2D1; }
+  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
+  *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
-  .wrap{max-width:720px;margin:48px auto;padding:24px}
-  h1{margin:0 0 16px;font-size:48px}
-  p{font-size:18px;color:#222}
-  .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:24px}
-  .btn{flex:1 1 260px; padding:18px 20px;font-weight:800;font-size:22px;border-radius:16px;
-       background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff; border:none; box-shadow:0 8px 24px rgba(255,143,171,.35); cursor:pointer}
+  .wrap{max-width:720px;margin:56px auto;padding:24px}
+  h1{margin:0 0 10px;font-size:48px}
+  p{font-size:18px;color:#222;margin:0 0 20px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .tile{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px}
+  .btn{width:100%;padding:18px 20px;font-weight:800;font-size:20px;border-radius:14px;
+       background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff;border:none;cursor:pointer}
   .btn:active{transform:translateY(1px)}
+  .form{margin-top:14px;padding:14px;border:1px solid #ffd1df;border-radius:12px;background:#fff;display:none}
+  label{font-weight:700;font-size:14px}
+  input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px;margin-top:6px}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .ghost{padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #ffd1df;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Login</h1>
-  <p>Choose a role then <strong>type the UUID</strong> to continue (no magic link).</p>
-  <div class="row">
-    <button class="btn" onclick="__APP__.loginAs('owner')">Login as Owner</button>
-    <button class="btn" onclick="__APP__.loginAs('admin')">Login as Admin</button>
-  </div>
-</div>
+  <div class="wrap">
+    <h1>Login</h1>
+    <p>Choose a role then type the <strong>UUID</strong> to continue (no magic link).</p>
 
-<!-- config + app -->
-<script src="config.js"></script>
-<script type="module" src="app.js"></script>
+    <div class="tiles">
+      <!-- OWNER -->
+      <div class="tile">
+        <button class="btn" id="btnOwner">Login as Owner</button>
+        <form class="form" id="formOwner">
+          <label for="ownerUUID">Owner UUID</label>
+          <input id="ownerUUID" placeholder="8cd15b4b-0755-4843-a8d5-2652fa408fe5" autocomplete="off"/>
+          <div class="row">
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+            <button class="ghost" type="button" id="fillOwner">Use default</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ADMIN -->
+      <div class="tile">
+        <button class="btn" id="btnAdmin">Login as Admin</button>
+        <form class="form" id="formAdmin">
+          <label for="adminUUID">Admin UUID</label>
+          <input id="adminUUID" placeholder="4e63c32b-cc75-48de-b111-e8a977d868a2" autocomplete="off"/>
+          <div class="row">
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+            <button class="ghost" type="button" id="fillAdmin1">Admin 1</button>
+            <button class="ghost" type="button" id="fillAdmin2">Admin 2</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- config + shared app -->
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+
+  <script>
+    // simple UI toggles
+    const $ = s => document.querySelector(s);
+    $('#btnOwner').onclick = () => { $('#formOwner').style.display='block'; $('#formAdmin').style.display='none'; $('#ownerUUID').focus(); };
+    $('#btnAdmin').onclick = () => { $('#formAdmin').style.display='block'; $('#formOwner').style.display='none'; $('#adminUUID').focus(); };
+
+    // quick-fill buttons from config default IDs
+    $('#fillOwner').onclick = () => $('#ownerUUID').value = window.ID_OWNER || '';
+    $('#fillAdmin1').onclick = () => $('#adminUUID').value = window.ID_ADMIN1 || '';
+    $('#fillAdmin2').onclick = () => $('#adminUUID').value = window.ID_ADMIN2 || '';
+
+    // submit handlers call app helper
+    $('#formOwner').onsubmit = (e)=>{ e.preventDefault();
+      const uid = $('#ownerUUID').value.trim(); if(!uid) return alert('Enter owner UUID');
+      window.__APP__.loginWithUid('owner', uid);
+    };
+    $('#formAdmin').onsubmit = (e)=>{ e.preventDefault();
+      const uid = $('#adminUUID').value.trim(); if(!uid) return alert('Enter admin UUID');
+      window.__APP__.loginWithUid('admin', uid);
+    };
+  </script>
 </body></html>
