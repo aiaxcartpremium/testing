@@ -1,123 +1,275 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner Panel</title>
-<link rel="stylesheet" href="style.css"/>
-<script src="config.js"></script>
-<script src="app.js"></script>
-<script src="./common.js"></script>
-<script>
-  requireRole(['owner']);     // owner only for this page
-  renderNav('topNav');        // owner will still see Admin link
-</script>
-</head><body>
-  <div id="topNav"></div>
-<div class="container">
-  <div class="topbar">
-    <a href="admin.html">Go to Admin (test)</a>
-    <div><button class="btn-outline" onclick="logout()">Logout</button></div>
-  </div>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AiaxStock • Owner</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <style>
+    :root{
+      --line:#f0e4ea; --ink:#1f1f1f; --muted:#63636b; --accent:#ffb3c6;
+      --bg1:#ffe5ec; --bg2:#ffc2d1;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,var(--bg1),var(--bg2))}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid var(--line)}
+    .brand{font-weight:800;color:#8a1049}
+    .btn{height:42px;border:1px solid var(--accent);border-radius:10px;background:linear-gradient(180deg,#ffe6ee,#ffc2d1);color:#8a1049;font-weight:800;cursor:pointer;padding:0 14px}
+    .link{color:#0b6bfd;text-decoration:none}
+    .wrap{padding:16px;display:flex;flex-wrap:wrap;gap:16px}
+    .card{flex:1 1 520px;min-width:340px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+    h3{margin:0 0 10px 0}
+    label{display:block;font-size:12px;color:#6b2a45;margin:8px 0 6px}
+    input,select,textarea{width:100%;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font-size:14px;background:#fff}
+    textarea{height:90px;padding:10px;resize:vertical}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .col{flex:1 1 160px;min-width:160px}
+    table{width:100%;border-collapse:collapse;margin-top:8px;background:#fff}
+    th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+    .muted{color:var(--muted)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#f7eef2;border:1px solid var(--line);font-size:12px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">AiaxStock Management — Owner</div>
+  <nav style="display:flex;gap:8px;align-items:center">
+    <a class="link" href="./admin.html">Go to Admin</a>
+    <button class="btn" onclick="logout()">Logout</button>
+  </nav>
+</header>
 
-  <div class="card">
-    <h1>Owner • Add Stock</h1>
-    <form id="addStockForm">
-      <label>Product</label>
-      <select name="product_key" id="productSelect" required></select>
+<div class="wrap">
 
-      <label>Account type</label>
-      <select name="account_type" required>
-        <option value="shared profile">shared profile</option>
-        <option value="solo profile">solo profile</option>
-        <option value="shared account">shared account</option>
-        <option value="solo account">solo account</option>
-      </select>
+  <!-- Add Stock -->
+  <section class="card">
+    <h3>Add Stock</h3>
+    <div class="row">
+      <div class="col">
+        <label>Product</label>
+        <select id="p_product"></select>
+      </div>
+      <div class="col">
+        <label>Account type</label>
+        <select id="p_type">
+          <option>shared profile</option>
+          <option>solo profile</option>
+          <option>shared account</option>
+          <option>solo account</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>Duration</label>
+        <select id="p_duration">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30">1 month</option>
+          <option value="60">2 months</option>
+          <option value="90">3 months</option>
+          <option value="120">4 months</option>
+          <option value="150">5 months</option>
+          <option value="180">6 months</option>
+          <option value="210">7 months</option>
+          <option value="240">8 months</option>
+          <option value="270">9 months</option>
+          <option value="300">10 months</option>
+          <option value="330">11 months</option>
+          <option value="360">12 months</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>Quantity</label>
+        <input id="p_qty" type="number" min="1" value="1"/>
+      </div>
+    </div>
 
-      <label>Duration</label>
-      <select name="duration_days" id="durationSelect"></select>
+    <div class="row">
+      <div class="col"><label>Email (optional)</label><input id="p_email" placeholder="login email"/></div>
+      <div class="col"><label>Password (optional)</label><input id="p_pass" placeholder="login password"/></div>
+      <div class="col"><label>Profile (optional)</label><input id="p_profile" placeholder="profile name"/></div>
+      <div class="col"><label>PIN (optional)</label><input id="p_pin" placeholder="profile pin"/></div>
+    </div>
+    <label>Notes (optional)</label>
+    <textarea id="p_notes" placeholder="any notes"></textarea>
 
-      <label>Quantity</label>
-      <input type="number" min="1" name="quantity" value="1"/>
+    <button class="btn" style="margin-top:10px" onclick="addStock()">Add stock</button>
+    <div class="muted" id="addHint"></div>
+  </section>
 
-      <label>Email </label>
-      <input name="email" placeholder="login email"/>
-
-      <label>Password </label>
-      <input name="password" placeholder="login password"/>
-
-      <label>Profile (optional)</label>
-      <input name="profile_name" placeholder="profile name"/>
-
-      <label>PIN (optional)</label>
-      <input name="pin" placeholder="profile pin"/>
-
-      <label>Notes</label>
-      <textarea name="notes" rows="3"></textarea>
-
-      <div style="margin-top:12px"><button>Add stock</button></div>
-    </form>
-  </div>
-
-  <div class="card">
-    <h1>Current Stock (summary)</h1>
-    <table>
-      <thead><tr><th>Product</th><th>Type</th><th>Qty</th></tr></thead>
-      <tbody id="stockTbody"></tbody>
+  <!-- Stock Summary -->
+  <section class="card">
+    <h3>Stock Summary</h3>
+    <div class="muted">Grouped by product + account type (owner’s inventory only).</div>
+    <table id="sumTbl">
+      <thead>
+        <tr><th>Product</th><th>Type</th><th class="muted">Duration</th><th>Qty</th></tr>
+      </thead>
+      <tbody></tbody>
     </table>
-  </div>
+  </section>
 
-  <div class="card">
-    <h1>Buyer Records (all admins)</h1>
-    <table>
+  <!-- All Buyers Record (all admins) -->
+  <section class="card" style="flex-basis:100%">
+    <h3>All Buyers Record (Admins)</h3>
+    <div class="row">
+      <div class="col"><label>Filter by Admin ID (optional)</label><input id="f_admin" placeholder="paste admin UUID"/></div>
+      <div class="col"><label>&nbsp;</label><button class="btn" onclick="listSales()">Refresh</button></div>
+    </div>
+    <table id="salesTbl">
       <thead>
         <tr>
-          <th>Product</th><th>Type</th><th>Duration</th><th>Created</th>
-          <th>Expiry</th><th>Admin</th><th>Buyer</th><th>Price</th><th></th>
+          <th>ID</th><th>Admin</th><th>Product</th><th>Type</th>
+          <th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th><th>Save</th>
         </tr>
       </thead>
-      <tbody id="salesTbody"></tbody>
+      <tbody></tbody>
     </table>
+  </section>
 
-    <div style="margin-top:12px" class="row">
-      <input id="editSaleId" placeholder="Sale ID to edit"/>
-      <input id="editBuyer" placeholder="Buyer social/link"/>
-      <input id="editPrice" type="number" step="0.01" placeholder="Price"/>
-      <button class="btn-outline" onclick="onOwnerUpdate()">Save buyer info</button>
-    </div>
-  </div>
 </div>
 
 <script>
-  const u = requireRole(['owner']);
-  const productSelect = document.getElementById('productSelect');
-  const durationSelect = document.getElementById('durationSelect');
+  // ---- Owner-only guard ----
+  const role = localStorage.getItem('role');
+  const uid  = localStorage.getItem('user_id');
+  if(role!=='owner' || !uid){ location.replace('./index.html'); }
+  function logout(){ localStorage.clear(); location.replace('./index.html'); }
 
-  loadProducts(productSelect);
-  fillDuration(durationSelect);
+  // ---- Supabase ----
+  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-  document.getElementById('addStockForm').addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    await ownerAddStock(e.target);
-    await loadStockSummary(document.getElementById('stockTbody'));
-  });
+  // ---- Helpers ----
+  function opt(el,val,txt){ const o=document.createElement('option'); o.value=val; o.textContent=txt; el.appendChild(o); }
+  function fmt(d){ try{ return new Date(d).toLocaleString(); }catch{ return '—'; } }
 
-  async function onOwnerUpdate(){
-    const id = document.getElementById('editSaleId').value.trim();
-    if(!id){ return alert('Enter Sale ID'); }
-    const buyer = document.getElementById('editBuyer').value.trim();
-    const price = document.getElementById('editPrice').value.trim();
-    await upsertBuyerInfo(id, buyer, price);
-    await listSales(document.getElementById('salesTbody'));
+  // ---- Load product dropdown ----
+  async function loadProducts(){
+    const sel = document.getElementById('p_product');
+    sel.innerHTML = '';
+    const { data, error } = await supabase.from('products')
+      .select('key,label,category').order('category').order('label');
+    if(error){ alert('Load products failed: '+error.message); return; }
+    data.forEach(p => opt(sel, p.key, `${p.category} • ${p.label}`));
   }
 
-  (async ()=>{
-    await loadStockSummary(document.getElementById('stockTbody'));
-    await listSales(document.getElementById('salesTbody'));
-    // enable inline edit shortcut
-    document.getElementById('salesTbody').addEventListener('click', (e)=>{
-      if(e.target.classList.contains('edit')){
-        const id = e.target.closest('tr').querySelector('button').dataset.id;
-        document.getElementById('editSaleId').value = id;
-      }
-    });
+  // ---- Add Stock ----
+  async function addStock(){
+    const product_key  = document.getElementById('p_product').value;
+    const account_type = document.getElementById('p_type').value;
+    const duration_days= parseInt(document.getElementById('p_duration').value,10);
+    const quantity     = Math.max(1, parseInt(document.getElementById('p_qty').value||'1',10));
+    const email        = (document.getElementById('p_email').value||null);
+    const password     = (document.getElementById('p_pass').value||null);
+    const profile_name = (document.getElementById('p_profile').value||null);
+    const pin          = (document.getElementById('p_pin').value||null);
+    const notes        = (document.getElementById('p_notes').value||null);
+
+    if(!product_key) return alert('Select a product.');
+
+    const payload = {
+      product_key, account_type, duration_days, quantity,
+      email, password, profile_name, pin, notes,
+      owner_id: uid
+    };
+
+    const { error } = await supabase.from('stocks').insert(payload);
+    if(error){ alert('Add stock failed: '+error.message); return; }
+    document.getElementById('addHint').textContent = 'Stock added.';
+    await loadSummary();
+  }
+
+  // ---- Stock Summary (aggregate in JS) ----
+  async function loadSummary(){
+    const tbody = document.querySelector('#sumTbl tbody');
+    tbody.innerHTML = '<tr><td class="muted" colspan="4">Loading…</td></tr>';
+
+    // Pull only owner’s stocks
+    const { data, error } = await supabase
+      .from('stocks')
+      .select('product_key,account_type,duration_days,quantity,owner_id')
+      .eq('owner_id', uid)
+      .order('product_key');
+
+    if(error){ tbody.innerHTML = `<tr><td colspan="4">Error: ${error.message}</td></tr>`; return; }
+    if(!data.length){ tbody.innerHTML = '<tr><td class="muted" colspan="4">No stocks yet.</td></tr>'; return; }
+
+    // aggregate by product+type+duration
+    const map = new Map();
+    for(const r of data){
+      const k = `${r.product_key}__${r.account_type}__${r.duration_days||0}`;
+      map.set(k, (map.get(k)||0) + (r.quantity||0));
+    }
+
+    tbody.innerHTML = '';
+    for(const [k, qty] of map){
+      const [prod, type, dur] = k.split('__');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${prod}</td><td>${type}</td><td class="muted">${dur?dur+' days':'—'}</td><td><b>${qty}</b></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---- List all admins’ sales (owner view) ----
+  async function listSales(){
+    const tbody = document.querySelector('#salesTbl tbody');
+    tbody.innerHTML = '<tr><td class="muted" colspan="9">Loading…</td></tr>';
+
+    let q = supabase.from('sales')
+      .select('id,admin_id,product_key,account_type,created_at,expires_at,buyer_link,price,owner_id')
+      .eq('owner_id', uid)
+      .order('created_at', { ascending:false })
+      .limit(300);
+
+    const filt = (document.getElementById('f_admin').value||'').trim();
+    if(filt) q = q.eq('admin_id', filt);
+
+    const { data, error } = await q;
+    if(error){ tbody.innerHTML = `<tr><td colspan="9">Error: ${error.message}</td></tr>`; return; }
+
+    if(!data.length){ tbody.innerHTML = '<tr><td class="muted" colspan="9">No records.</td></tr>'; return; }
+
+    tbody.innerHTML = '';
+    for(const r of data){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.id}</td>
+        <td><span class="badge">${(r.admin_id||'').slice(0,8)}…</span></td>
+        <td>${r.product_key}</td>
+        <td>${r.account_type}</td>
+        <td>${fmt(r.created_at)}</td>
+        <td>${r.expires_at?fmt(r.expires_at):'—'}</td>
+        <td><input data-k="buyer_link" data-id="${r.id}" value="${r.buyer_link??''}" placeholder="@user or link"/></td>
+        <td><input data-k="price" data-id="${r.id}" value="${r.price??''}" placeholder="0.00"/></td>
+        <td><button class="btn" data-act="save" data-id="${r.id}">Save</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // one-time event binding per refresh
+    tbody.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('[data-act="save"]'); if(!btn) return;
+      const id = btn.dataset.id;
+      const row = btn.closest('tr');
+      const link = row.querySelector('input[data-k="buyer_link"]').value || null;
+      const price= row.querySelector('input[data-k="price"]').value || null;
+
+      const { error } = await supabase.from('sales')
+        .update({ buyer_link:link, price:price })
+        .eq('id', id).eq('owner_id', uid);
+
+      if(error) return alert('Update failed: '+error.message);
+      alert('Saved.');
+    }, { once:true });
+  }
+
+  // ---- Init ----
+  (async function init(){
+    await loadProducts();
+    await loadSummary();
+    await listSales();
   })();
 </script>
-</body></html>
+</body>
+</html>
