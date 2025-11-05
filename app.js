@@ -2,7 +2,7 @@
    AiaxStock Management • app.js
    ========================= */
 
-// ---- Supabase client (config.js must define SUPABASE_URL & SUPABASE_ANON_KEY)
+// ---- Supabase client
 const supabase = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---- tiny DOM helpers
@@ -19,6 +19,9 @@ const clearSession  = () => localStorage.removeItem(SESSION_KEY);
 async function requireRole(roles){
   const s = getSession();
   if(!s || !roles.includes(s.role)){ location.href = 'index.html'; throw new Error('not authorized'); }
+  // extra guard: validate UUID vs config
+  if(s.role === 'owner' && s.uuid !== OWNER_UUID){ clearSession(); location.href='index.html'; throw new Error('owner uuid mismatch'); }
+  if(s.role === 'admin' && !ADMIN_UUIDS.includes(s.uuid)){ clearSession(); location.href='index.html'; throw new Error('admin uuid mismatch'); }
   return s;
 }
 const currentUUID = () => getSession()?.uuid || null;
@@ -34,7 +37,7 @@ function toCSV(rows){
   return [head, ...lines].join('\n');
 }
 
-// ---- durations & account types
+// ---- durations & account types (including your extra choices)
 const ACCOUNT_TYPES = [
   'shared profile','solo profile','shared account','solo account','invitation','head','edu'
 ];
@@ -109,12 +112,10 @@ async function ownerAddStockSubmit(e){
 
 async function fetchStocksSummaryOwner(){
   try{
-    let rows=[];
-    let res = await supabase.from('stocks_summary')
+    let { data, error } = await supabase.from('stocks_summary')
       .select('product_key,account_type,duration_code,total_qty').order('product_key');
-    if(res.error) throw res.error;
-    rows = res.data || [];
-    return rows;
+    if(error) throw error;
+    return data||[];
   }catch(err){
     // fallback: group client-side
     try{
@@ -156,7 +157,7 @@ async function ownerRenderStocks(){
             <td>${r.account_type}</td>
             <td>${r.duration_code}</td>
             <td>${r.total_qty}</td>
-            <td><button class="btn-outline" data-rem='${encodeURIComponent(JSON.stringify(r))}'>Remove 1</button></td>
+            <td><button class="btn" style="padding:6px 10px" data-rem='${encodeURIComponent(JSON.stringify(r))}'>Remove 1</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -167,14 +168,14 @@ async function ownerRenderStocks(){
     on(btn,'click', async ()=>{
       const row = JSON.parse(decodeURIComponent(btn.dataset.rem));
       if(!confirm(`Remove 1 from ${row.product_key} • ${row.account_type} • ${row.duration_code}?`)) return;
-      // Prefer server rpc remove_one_stock
+      // Preferred: server rpc remove_one_stock
       let { error } = await supabase.rpc('remove_one_stock', {
         p_product: row.product_key,
         p_type: row.account_type,
         p_duration: row.duration_code
       });
       if(error){
-        // fallback delete one matching row (subject to RLS)
+        // fallback delete (subject to RLS)
         const res = await supabase.from('stocks')
           .delete()
           .eq('product_key', row.product_key)
@@ -190,7 +191,6 @@ async function ownerRenderStocks(){
 }
 
 async function ownerFetchRecords(){
-  // try RPC first
   try{
     const { data, error } = await supabase.rpc('list_my_sales', { p_owner: currentUUID() });
     if(error) throw error;
@@ -218,9 +218,9 @@ async function ownerRenderRecords(){
   wrap.innerHTML = `
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="muted">Total: ${rows.length}</div>
-      <button id="btnExportCSV" class="btn-outline">Export CSV</button>
+      <button id="btnExportCSV" class="btn">Export CSV</button>
     </div>
-    <table class="table small">
+    <table class="table">
       <thead><tr>
         <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th><th>Add days</th><th>Save</th>
       </tr></thead>
@@ -235,7 +235,7 @@ async function ownerRenderRecords(){
             <td><input type="text" class="buyerInput" value="${r.buyer_link||''}"></td>
             <td><input type="number" class="priceInput" step="0.01" value="${r.price??''}"></td>
             <td><input type="number" class="addDaysInput" min="1" placeholder="e.g. 7"></td>
-            <td><button class="btn-outline saveRow">Save</button></td>
+            <td><button class="btn saveRow" style="padding:6px 10px">Save</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -303,7 +303,7 @@ async function adminRenderAvailable(){
   box.innerHTML = `
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
       <h3 style="margin:0">Available Stocks</h3>
-      <button id="btnAdminRefresh" class="btn-outline">Refresh</button>
+      <button id="btnAdminRefresh" class="btn">Refresh</button>
     </div>
     <table class="table">
       <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
@@ -331,7 +331,6 @@ async function adminFillFormOptions(){
   productSel.innerHTML = `<option value="" disabled selected>Select product</option>` +
     uniqProd.map(k=>`<option value="${k}">${labelOf(k)}</option>`).join('');
 
-  // shrink other selects based on chosen product
   on(productSel,'change', ()=>{
     const p = productSel.value;
     const sub = available.filter(r=>r.product_key===p);
@@ -366,7 +365,7 @@ async function adminGetAccount(){
     if(!r){ out.textContent = 'No stock matched.'; }
     else {
       out.innerHTML = `
-        <div class="card">
+        <div class="card" style="box-shadow:none;border:1px solid #ffd1df">
           <div><b>Email:</b> ${r.email||'-'}</div>
           <div><b>Password:</b> ${r.password||'-'}</div>
           <div><b>Profile:</b> ${r.profile_name||'-'} &nbsp; <b>PIN:</b> ${r.pin||'-'}</div>
@@ -387,7 +386,7 @@ async function adminRenderMySales(){
   const labelOf = (key)=> products.find(p=>p.key===key)?.label || key;
 
   wrap.innerHTML = `
-    <table class="table small">
+    <table class="table">
       <thead><tr>
         <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th>
       </tr></thead>
@@ -414,54 +413,78 @@ async function adminRefreshAll(){
   await adminRenderMySales();
 }
 
-// ================= LOGIN PAGE (no inline JS) =================
-function bootLogin(){
-  // show/hide forms
-  on(qs('#btnOwner'), 'click', ()=>{
-    qs('#formOwner').style.display='block';
-    qs('#formAdmin').style.display='none';
-    qs('#ownerUUID').focus();
-  });
-  on(qs('#btnAdmin'), 'click', ()=>{
-    qs('#formAdmin').style.display='block';
-    qs('#formOwner').style.display='none';
-    qs('#adminUUID').focus();
-  });
+// ================= PUBLIC API for index.html =================
+window.__APP__ = {
+  loginWithUid(role, uuid){
+    if(!uuid) return alert('UUID required');
+    // hard validation vs config
+    if(role === 'owner'){
+      if(uuid !== OWNER_UUID) return alert('Invalid OWNER UUID');
+    }else if(role === 'admin'){
+      if(!ADMIN_UUIDS.includes(uuid)) return alert('Invalid ADMIN UUID');
+    }else{
+      return alert('Invalid role');
+    }
+    saveSession({ role, uuid });
+    location.href = role === 'owner' ? 'owner.html' : 'admin.html';
+  }
+};
 
-  // submit handlers
-  on(qs('#formOwner'),'submit', (e)=>{
-    e.preventDefault();
-    const uuid = qs('#ownerUUID').value.trim();
-    if(!uuid) return alert('Enter owner UUID');
-    window.__APP__.loginWithUid('owner', uuid);
-  });
-  on(qs('#formAdmin'),'submit', (e)=>{
-    e.preventDefault();
-    const uuid = qs('#adminUUID').value.trim();
-    if(!uuid) return alert('Enter admin UUID');
-    window.__APP__.loginWithUid('admin', uuid);
-  });
-}
+// ================= Router (after DOM ready) =================
+document.addEventListener('DOMContentLoaded', ()=>{
+  if(!supabase){ alert('Supabase not loaded'); return; }
+  if(qs('#loginPage'))  {
+    // show/hide forms
+    on(qs('#btnOwner'), 'click', ()=>{
+      qs('#formOwner').style.display='block';
+      qs('#formAdmin').style.display='none';
+      qs('#ownerUUID').focus();
+    });
+    on(qs('#btnAdmin'), 'click', ()=>{
+      qs('#formAdmin').style.display='block';
+      qs('#formOwner').style.display='none';
+      qs('#adminUUID').focus();
+    });
+    // submit handlers
+    on(qs('#formOwner'),'submit', (e)=>{
+      e.preventDefault();
+      window.__APP__.loginWithUid('owner', qs('#ownerUUID').value.trim());
+    });
+    on(qs('#formAdmin'),'submit', (e)=>{
+      e.preventDefault();
+      window.__APP__.loginWithUid('admin', qs('#adminUUID').value.trim());
+    });
+    return;
+  }
+  if(qs('#ownerPage'))  {
+    requireRole(['owner']).then(()=>{
+      on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
+      on(qs('#goAdmin'),  'click', ()=>{ location.href='admin.html'; });
 
-// ================= OWNER/ADMIN PAGE BOOTS =================
-async function bootOwner(){
-  await requireRole(['owner']);           // only owner
-  on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
-  on(qs('#goAdmin'),  'click', ()=>{ location.href='admin.html'; });
+      fillStaticSelectsOwner();
+      fillProductsSelect(qs('#productSelect'));
+      on(qs('#addStockForm'), 'submit', ownerAddStockSubmit);
 
-  fillStaticSelectsOwner();
-  await fillProductsSelect(qs('#productSelect'));
-  on(qs('#addStockForm'), 'submit', ownerAddStockSubmit);
+      on(qs('#tabAdd'),     'click', ()=>showOwnerTab('add'));
+      on(qs('#tabStocks'),  'click', ()=>showOwnerTab('stocks'));
+      on(qs('#tabRecords'), 'click', ()=>showOwnerTab('records'));
 
-  // tabs
-  on(qs('#tabAdd'),     'click', ()=>showOwnerTab('add'));
-  on(qs('#tabStocks'),  'click', ()=>showOwnerTab('stocks'));
-  on(qs('#tabRecords'), 'click', ()=>showOwnerTab('records'));
+      showOwnerTab('add');
+      ownerRenderStocks();
+      ownerRenderRecords();
+    });
+    return;
+  }
+  if(qs('#adminPage'))  {
+    requireRole(['admin']).then(()=>{
+      on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
+      on(qs('#goOwner'),  'click', ()=>{ location.href='owner.html'; });
 
-  showOwnerTab('add');
-  ownerRenderStocks();
-  ownerRenderRecords();
-}
+      adminRefreshAll();
+      on(qs('#btnGetAccount'),'click', adminGetAccount);
+    });
+  }
+});
 
 function showOwnerTab(which){
   const panes = { add: qs('#paneAdd'), stocks: qs('#paneStocks'), records: qs('#paneRecords') };
@@ -472,29 +495,3 @@ function showOwnerTab(which){
   const map = { add:'#tabAdd', stocks:'#tabStocks', records:'#tabRecords' };
   qs(map[which])?.classList.add('active');
 }
-
-async function bootAdmin(){
-  await requireRole(['admin']);           // admin only (owner can have a separate admin uid if needed)
-  on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
-  on(qs('#goOwner'),  'click', ()=>{ location.href='owner.html'; });
-
-  await adminRefreshAll();
-  on(qs('#btnGetAccount'),'click', adminGetAccount);
-}
-
-// ================= PUBLIC API for index.html =================
-window.__APP__ = {
-  loginWithUid(role, uuid){
-    if(!uuid) return alert('UUID required');
-    if(role!=='owner' && role!=='admin') return alert('Invalid role');
-    saveSession({ role, uuid });
-    location.href = role === 'owner' ? 'owner.html' : 'admin.html';
-  }
-};
-
-// ================= Router (runs once DOM is ready) =================
-document.addEventListener('DOMContentLoaded', ()=>{
-  if(qs('#loginPage'))  return bootLogin();
-  if(qs('#ownerPage'))  return bootOwner();
-  if(qs('#adminPage'))  return bootAdmin();
-});
