@@ -240,31 +240,41 @@ async function ownerRenderRecords(){
   if(!rows.length){ wrap.innerHTML = '<div class="muted">No records yet.</div>'; return; }
 
   wrap.innerHTML = `
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div class="muted">Total: ${rows.length}</div>
-      <button id="btnExportCSV" class="btn">Export CSV</button>
-    </div>
-    <table class="table">
-      <thead><tr>
-        <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th><th>Add days</th><th>Save</th>
-      </tr></thead>
-      <tbody>
-        ${rows.map(r=>`
-          <tr data-id="${r.id}">
-            <td>${r.id}</td>
-            <td>${labelOf(r.product_key)}</td>
-            <td>${r.account_type}</td>
-            <td>${fmtDT(r.created_at)}</td>
-            <td><input type="datetime-local" class="expInput" value="${r.expires_at? new Date(r.expires_at).toISOString().slice(0,16):''}"></td>
-            <td><input type="text" class="buyerInput" value="${r.buyer_link||''}"></td>
-            <td><input type="number" class="priceInput" step="0.01" value="${r.price??''}"></td>
-            <td><input type="number" class="addDaysInput" min="1" placeholder="e.g. 7"></td>
-            <td><button class="btn saveRow" style="padding:6px 10px">Save</button></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+  <div class="row between">
+    <div class="muted">Total: ${rows.length}</div>
+    <button id="btnExportCSV" class="btn-outline">Export CSV</button>
+  </div>
+  <table class="table small">
+    <thead><tr>
+      <th>ID</th>
+      <th>Product</th>
+      <th>Type</th>
+      <th>Admin</th>
+      <th>Created</th>
+      <th>Expires</th>
+      <th>Buyer link</th>
+      <th>Price</th>
+      <th>Add days</th>
+      <th>Save</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r=>`
+        <tr data-id="${r.id}">
+          <td>${r.id}</td>
+          <td>${labelOf(r.product_key)}</td>
+          <td>${r.account_type}</td>
+          <td>${r.admin_id ? (String(r.admin_id).slice(0,8) + '…') : '-'}</td>
+          <td>${fmtDT(r.created_at)}</td>
+          <td><input type="datetime-local" class="expInput" value="${r.expires_at? new Date(r.expires_at).toISOString().slice(0,16):''}"></td>
+          <td><input type="text" class="buyerInput" value="${r.buyer_link||''}"></td>
+          <td><input type="number" class="priceInput" step="0.01" value="${r.price??''}"></td>
+          <td><input type="number" class="addDaysInput" min="1" placeholder="e.g. 7"></td>
+          <td><button class="btn-outline saveRow">Save</button></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+`;
 
   on(qs('#btnExportCSV'),'click', ()=>{
     const csv = toCSV(rows);
