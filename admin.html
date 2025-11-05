@@ -1,145 +1,80 @@
 <!doctype html><html><head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Admin Panel • Aiax Stocks</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin Panel</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </head><body>
-<div class="container grid">
-  <div class="btnrow"><button class="secondary" onclick="logout()">Logout</button><a class="badge" href="owner.html">Go to Owner (test)</a></div>
-
-  <div class="card grid">
-    <h1>Admin • Get Account</h1>
-    <p class="small">Select a product and type. On “Get Account”, we call <code>get_account</code> (RPC). It decrements stock and records a sale — you receive the credentials + expiry below.</p>
-    <div class="grid grid-2">
-      <div><label>Product</label><select id="product"></select></div>
-      <div><label>Account type</label>
-        <select id="acctType">
-          <option>shared profile</option><option>solo profile</option>
-          <option>shared account</option><option>solo account</option>
-        </select>
-      </div>
-      <div><label>Duration</label>
-        <select id="duration">
-          <option value="7d">7 days</option><option value="14d">14 days</option>
-          <option value="1m">1 month</option><option value="2m">2 months</option><option value="3m">3 months</option>
-          <option value="4m">4 months</option><option value="5m">5 months</option><option value="6m">6 months</option>
-          <option value="7m">7 months</option><option value="8m">8 months</option><option value="9m">9 months</option>
-          <option value="10m">10 months</option><option value="11m">11 months</option><option value="12m">12 months</option>
-        </select>
-      </div>
-      <div><label>Buyer social link</label><input id="buyer" placeholder="@username or link"></div>
-      <div><label>Price</label><input id="price" type="number" step="0.01" placeholder="e.g. 149.00"></div>
-    </div>
-    <div class="btnrow">
-      <button id="btnGet">Get Account</button>
-      <button class="secondary" onclick="copyCreds()">Copy creds</button>
-    </div>
-    <div id="result" class="kv"></div>
-    <div id="msg" class="small"></div>
+<div class="container">
+  <div class="topbar">
+    <a href="owner.html">Go to Owner (test)</a>
+    <div><button class="btn-outline" onclick="logout()">Logout</button></div>
   </div>
 
-  <div class="card grid">
-    <h2>Stock Summary (safe)</h2>
-    <table class="table" id="sumTbl">
-      <thead><tr><th>Product</th><th>Type</th><th>Available</th></tr></thead>
-      <tbody></tbody>
+  <div class="card">
+    <h1>Admin • Available Stocks</h1>
+    <div class="row">
+      <select id="durationSelect"></select>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Product</th><th>Type</th><th>Qty</th><th style="text-align:right">Action</th></tr>
+      </thead>
+      <tbody id="adminStockTbody"></tbody>
     </table>
   </div>
 
-  <div class="card grid">
-    <h2>My Sales</h2>
-    <table class="table" id="salesTbl">
-      <thead><tr>
-        <th>ID</th><th>When</th><th>Product</th><th>Type</th><th>Buyer</th><th>Price</th><th>Expires</th>
-      </tr></thead><tbody></tbody>
-    </table>
+  <div class="card" id="lastBox" style="display:none">
+    <h1>Last Provided Credentials</h1>
+    <div id="creds"></div>
+    <div style="margin-top:10px"><button class="btn-outline" onclick="copyCreds()">Copy creds</button></div>
   </div>
 </div>
 
-<script src="config.js"></script>
 <script>
-function logout(){ sb.auth.signOut().then(()=>location.href='index.html'); }
+  const u = requireRole(['admin']);
+  fillDuration(document.getElementById('durationSelect'));
 
-async function requireAdmin(){
-  const { data } = await sb.auth.getSession();
-  if(!data.session){ location.href='index.html'; return null; }
-  const uid = data.session.user.id;
-  const prof = await sb.from('profiles').select('role').eq('id', uid).maybeSingle();
-  if(prof.error || prof.data?.role!=='admin'){ location.href='index.html'; return null; }
-  return uid;
-}
-async function loadProducts(){
-  const { data } = await sb.from('products').select('product_key,label').order('category');
-  const sel = document.getElementById('product'); sel.innerHTML='';
-  (data||[]).forEach(p=>{
-    const o=document.createElement('option'); o.value=p.product_key; o.textContent=p.label; sel.appendChild(o);
+  function renderAdminTable(rows){
+    const tb = document.getElementById('adminStockTbody');
+    tb.innerHTML = "";
+    rows.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.product_label||r.product_key}</td>
+        <td>${r.account_type}</td>
+        <td style="text-align:right">${r.total_qty}</td>
+        <td style="text-align:right">
+          <button class="btn-xs" data-product="${r.product_key}" data-type="${r.account_type}">Get Account</button>
+        </td>
+      `;
+      tb.appendChild(tr);
+    });
+  }
+
+  document.getElementById('adminStockTbody').addEventListener('click', async (e)=>{
+    if(e.target.tagName === 'BUTTON'){
+      const product_key = e.target.dataset.product;
+      const account_type = e.target.dataset.type;
+      const duration_days = parseInt(document.getElementById('durationSelect').value,10);
+      const res = await adminGetAccount({product_key, account_type, duration_days});
+      if(!res) return;
+      document.getElementById('lastBox').style.display = 'block';
+      document.getElementById('creds').innerText =
+        `Email: ${res.email||''}\nPassword: ${res.password||''}\nProfile: ${res.profile_name||''}\nPIN: ${res.pin||''}\nExpires: ${new Date(res.expires_at).toLocaleString()}\nSale ID: ${res.sale_id}`;
+      await loadStockSummary(document.getElementById('adminStockTbody')).then(renderAdminTable);
+    }
   });
-}
-async function stockSummary(){
-  const { data, error } = await sb.rpc('admin_stock_summary');
-  const tb = document.querySelector('#sumTbl tbody'); tb.innerHTML='';
-  (data||[]).forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${r.product_key}</td><td>${r.account_type}</td><td>${r.available}</td>`;
-    tb.appendChild(tr);
-  });
-}
-document.getElementById('btnGet').onclick = async () => {
-  const msg=document.getElementById('msg'); msg.textContent='Fetching...';
-  const args = {
-    p_product_key: product.value,
-    p_account_type: acctType.value,
-    p_duration_choice: duration.value,
-    p_buyer_social: buyer.value||null,
-    p_price: price.value?Number(price.value):null
-  };
-  const { data, error } = await sb.rpc('get_account', args);
-  if(error){ msg.textContent = error.message; return; }
-  msg.textContent='Success ✔';
-  const r = (data && data[0]) || {};
-  // show creds
-  const box=document.getElementById('result');
-  box.innerHTML = `
-    <div>Email</div><div><code id="c_email">${r.email||''}</code></div>
-    <div>Password</div><div><code id="c_pwd">${r.password||''}</code></div>
-    <div>Profile</div><div><code id="c_prof">${r.profile_name||''}</code></div>
-    <div>PIN</div><div><code id="c_pin">${r.pin||''}</code></div>
-    <div>Notes</div><div><code id="c_notes">${r.notes||''}</code></div>
-    <div>Expires</div><div><code id="c_exp">${r.expires_at?new Date(r.expires_at).toLocaleString():''}</code></div>
-  `;
-  await stockSummary();
-  await mySales();
-};
-function copyCreds(){
-  const fields=['c_email','c_pwd','c_prof','c_pin','c_notes','c_exp'];
-  const vals = fields.map(id=>document.getElementById(id)?.textContent||'').filter(Boolean).join(' | ');
-  if(!vals){ alert('Nothing to copy'); return; }
-  navigator.clipboard.writeText(vals); 
-  alert('Copied');
-}
-async function mySales(){
-  const { data, error } = await sb
-    .from('sales')
-    .select('id,created_at,product_key,account_type,buyer_social,price,expires_at')
-    .order('created_at',{ascending:false})
-    .limit(30);
-  const tb=document.querySelector('#salesTbl tbody'); tb.innerHTML='';
-  (data||[]).forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td><span class="badge">#${r.id}</span></td>
-      <td>${new Date(r.created_at).toLocaleString()}</td>
-      <td>${r.product_key}</td><td>${r.account_type}</td>
-      <td>${r.buyer_social||''}</td><td>${r.price??''}</td>
-      <td>${r.expires_at?new Date(r.expires_at).toLocaleDateString():''}</td>`;
-    tb.appendChild(tr);
-  });
-}
-async function init(){
-  const ok = await requireAdmin(); if(!ok) return;
-  await loadProducts();
-  await stockSummary();
-  await mySales();
-}
-init();
+
+  function copyCreds(){
+    const t = document.getElementById('creds').innerText;
+    navigator.clipboard.writeText(t);
+    alert('Copied.');
+  }
+
+  (async ()=>{
+    const rows = await loadStockSummary(document.getElementById('adminStockTbody'));
+    renderAdminTable(rows);
+  })();
 </script>
 </body></html>
