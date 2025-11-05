@@ -214,12 +214,18 @@ async function ownerRenderStocks(){
   });
 }
 
-async function ownerFetchRecords(){
-  try{
-    const { data, error } = await supabase.rpc('list_my_sales', { p_owner: currentUUID() });
-    if(error) throw error;
-    return data||[];
-  }catch{
+
+  async function ownerFetchRecords(){
+  // Simple, reliable table select that includes admin_id
+  const { data, error } = await supabase
+    .from('sales')
+    .select('id,product_key,account_type,created_at,expires_at,buyer_link,price,admin_id')
+    .order('id', { ascending: false })
+    .limit(500);
+
+  if(error){ console.error(error); return []; }
+  return data || [];
+}catch{
     const res = await supabase
   .from('sales')
   .select('id,product_key,account_type,created_at,expires_at,buyer_link,price,admin_id')
