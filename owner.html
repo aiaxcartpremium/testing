@@ -4,6 +4,11 @@
 <link rel="stylesheet" href="style.css"/>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="./common.js"></script>
+<script>
+  requireRole(['owner']);     // owner only for this page
+  renderNav('topNav');        // owner will still see Admin link
+</script>
 </head><body>
   <div id="topNav"></div>
 <div class="container">
