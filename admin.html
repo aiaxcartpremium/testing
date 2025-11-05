@@ -2,178 +2,103 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AiaxStock • Admin</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
-  <script src="auth.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Admin • AiaxStock</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <script type="module">
+    import { getRole, getUID, logout, fetchAvailableSummary, rpcGetAccount, listMySales, fmt, toast } from "./app.js";
+    import { DURATION_MAP } from "./config.js";
+
+    if(getRole()!=="admin"){ location.href="./index.html"; }
+
+    async function refreshAvailable(){
+      const rows = await fetchAvailableSummary();
+      avail.innerHTML = rows.map(r=>`<div class="badge">${r.product_key} • ${r.account_type} • ${r.qty}</div>`).join(" ");
+      prod.innerHTML = rows.map(r=>`<option value="${r.product_key}|${r.account_type}">${r.product_key} — ${r.account_type} (${r.qty})</option>`).join("");
+    }
+
+    async function refreshMySales(){
+      const rows = await listMySales(getUID());
+      myBody.innerHTML = rows.map(r=>`
+        <tr><td>${r.id}</td><td>${r.product_key}</td><td>${r.account_type}</td>
+            <td>${fmt(r.created_at)}</td><td>${fmt(r.expires_at)}</td>
+            <td>${r.buyer_link||""}</td><td>${r.price||""}</td></tr>`).join("");
+    }
+
+    async function doGetAccount(){
+      if(!prod.value) return alert("Pick a product");
+      const [product_key, account_type] = prod.value.split("|");
+      const duration_days = Number(DURATION_MAP[duration.value]||0);
+      const payload = {
+        p_admin: getUID(),
+        p_product_key: product_key,
+        p_account_type: account_type,
+        p_duration_days: duration_days,
+        p_price: Number(price.value||0),
+        p_buyer_link: buyer.value||null
+      };
+      const row = await rpcGetAccount(payload);
+      if(!row){ toast("No stock available"); return; }
+      creds.value = `Email: ${row.email||""}\nPass: ${row.password||""}\nProfile: ${row.profile_name||""}\nPIN: ${row.pin||""}\nExpires: ${fmt(row.expires_at)}`;
+      await refreshMySales();
+      await refreshAvailable();
+    }
+
+    window.refreshAvailable = refreshAvailable;
+    window.refreshMySales = refreshMySales;
+    window.doGetAccount = doGetAccount;
+    window.logout = logout;
+
+    window.onload = async ()=>{ await refreshAvailable(); await refreshMySales(); };
+  </script>
 </head>
-<body class="pink-bg">
-  <header class="topbar">
-    <div class="brand">AiaxStock Management — <b>Admin</b></div>
-    <nav>
-      <!-- Owner link hidden for admins -->
-      <button class="btn small" onclick="logout()">Logout</button>
-    </nav>
-  </header>
+<body>
+  <div class="nav"><div class="nav-inner container">
+    <div class="brand">AiaxStock — Admin</div>
+    <div class="toolbar">
+      <!-- Admin deliberately cannot jump to Owner -->
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div></div>
 
-  <main class="container">
-    <!-- Stock summary (no secrets) -->
-    <section class="panel">
-      <h2>Available Stocks</h2>
-      <div id="stock-summary"></div>
+  <div class="container">
+    <section class="card">
+      <div class="toolbar"><h2>Available Stocks</h2><button class="btn small" onclick="refreshAvailable()">Refresh</button></div>
+      <div id="avail" class="grid"></div>
     </section>
-    
-<section class="card" id="availCard">
-  <h2>Available Stocks</h2>
-  <div id="availNote" class="muted">Loading…</div>
-  <table class="tbl" id="availTbl">
-    <thead><tr><th>Product</th><th>Account type</th><th>Qty</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</section>
-    <!-- Get Account -->
-    <section class="panel">
+
+    <section class="card">
       <h2>Get Account</h2>
-
-      <label>Product</label>
-      <select id="product"></select>
-
-      <div class="grid2">
+      <div class="grid two">
         <div>
-          <label>Account type</label>
-          <select id="acct"></select>
+          <label>Product (only those with stock)</label>
+          <select id="prod"></select>
         </div>
         <div>
           <label>Duration</label>
-          <select id="dur"></select>
+          <select id="duration">
+            <option value="7d">7 days</option><option value="14d">14 days</option>
+            <option value="1m">1 month</option><option value="2m">2 months</option>
+            <option value="3m">3 months</option><option value="6m">6 months</option>
+            <option value="12m">12 months</option>
+          </select>
         </div>
+        <div><label>Buyer social link</label><input id="buyer" placeholder="@username or link"/></div>
+        <div><label>Price</label><input id="price" type="number" placeholder="e.g. 149.00"/></div>
       </div>
-
-      <button class="btn pink" onclick="getAccount()">Get Account</button>
-
-      <div id="creds" class="mt"></div>
+      <div class="toolbar"><button class="btn" onclick="doGetAccount()">Get Account</button></div>
+      <textarea id="creds" rows="4" style="width:100%" placeholder="Credentials will appear here..." readonly></textarea>
     </section>
 
-    <!-- My Buyers Record -->
-    <section class="panel">
-      <h2>My Buyers Record</h2>
-      <div id="my-sales"></div>
+    <section class="card">
+      <div class="toolbar"><h2>My Buyers Record</h2><button class="btn small" onclick="refreshMySales()">Refresh</button></div>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th></tr></thead>
+        <tbody id="myBody"></tbody>
+      </table>
     </section>
-  </main>
+  </div>
 
-  <script>
-    const s = requireRole(['admin','owner']); if (!s) return;  // Owner can see Admin page
-    const db = supabase.createClient(APP.url, APP.key);
-
-    // Durations fixed list
-    const DURS = [7,14,30,60,90,120,150,180,210,240,270,300,330,365];
-
-    // 1) STOCK SUMMARY + feed selects with only "in stock"
-    async function loadStockSummary() {
-      const { data, error } = await db.rpc('list_products_in_stock', { p_owner: APP.ownerId });
-      if (error) { alert(error.message); return; }
-
-      // render table
-      const el = document.getElementById('stock-summary');
-      el.innerHTML = `
-        <table class="tbl">
-          <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
-          <tbody>
-            ${(data||[]).map(r=>`
-              <tr>
-                <td>${r.product_key}</td>
-                <td>${r.account_type}</td>
-                <td>${r.duration_days}d</td>
-                <td>${r.qty}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
-
-      // feed the selects
-      const prodSel = document.getElementById('product');
-      const acctSel = document.getElementById('acct');
-      const durSel  = document.getElementById('dur');
-
-      // unique products first
-      const prods = [...new Set((data||[]).map(r => r.product_key))];
-      prodSel.innerHTML = prods.map(k => `<option value="${k}">${k}</option>`).join('');
-
-      // when product changes, refresh type/duration choices limited by stock
-      function refreshTypeDur() {
-        const p = prodSel.value;
-        const rows = (data||[]).filter(r => r.product_key === p);
-        const types = [...new Set(rows.map(r=>r.account_type))];
-        acctSel.innerHTML = types.map(t=>`<option value="${t}">${t}</option>`).join('');
-
-        const durs = [...new Set(rows.map(r=>r.duration_days))].sort((a,b)=>a-b);
-        durSel.innerHTML = durs.map(d=>`<option value="${d}">${d} days</option>`).join('');
-      }
-      prodSel.onchange = refreshTypeDur;
-      refreshTypeDur();
-    }
-
-    // 2) GET ACCOUNT (calls your existing RPC that decrements stock + records sale)
-    async function getAccount() {
-      const product_key  = document.getElementById('product').value;
-      const account_type = document.getElementById('acct').value;
-      const duration     = parseInt(document.getElementById('dur').value,10);
-
-      const { data, error } = await db.rpc('get_account', {
-        p_owner_id: APP.ownerId,
-        p_admin_id: s.uid,
-        p_product_key: product_key,
-        p_account_type: account_type,
-        p_duration_days: duration
-      });
-
-      if (error) { alert(error.message); return; }
-      const c = data; // credentials row returned by RPC
-
-      document.getElementById('creds').innerHTML = `
-        <div class="creds">
-          <div><b>Email</b> ${c.email ?? ''}</div>
-          <div><b>Password</b> ${c.password ?? ''}</div>
-          <div><b>Profile</b> ${c.profile_name ?? ''}</div>
-          <div><b>PIN</b> ${c.pin ?? ''}</div>
-          <div><b>Expires</b> ${new Date(c.expires_at).toLocaleString()}</div>
-        </div>`;
-      await loadMySales(); // refresh my record
-      await loadStockSummary(); // qty goes down
-    }
-
-    // 3) MY BUYERS RECORD
-    async function loadMySales() {
-      const { data, error } = await db.rpc('list_my_sales', { p_admin: s.uid });
-      if (error) return;
-      const el = document.getElementById('my-sales');
-      el.innerHTML = `
-        <table class="tbl">
-          <thead><tr>
-            <th>ID</th><th>Product</th><th>Type</th>
-            <th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th>
-          </tr></thead>
-          <tbody>
-            ${(data||[]).map(r=>`
-            <tr>
-              <td>${r.id}</td>
-              <td>${r.product_key}</td>
-              <td>${r.account_type}</td>
-              <td>${new Date(r.created_at).toLocaleString()}</td>
-              <td>${new Date(r.expires_at).toLocaleString()}</td>
-              <td>${r.buyer_link ?? ''}</td>
-              <td>${r.price ?? ''}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`;
-    }
-
-    // INIT
-    (async () => {
-      await loadStockSummary();
-      await loadMySales();
-    })();
-  </script>
+  <div id="toast" class="toast"></div>
 </body>
 </html>
