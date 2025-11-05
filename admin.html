@@ -4,7 +4,13 @@
 <link rel="stylesheet" href="style.css"/>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="./common.js"></script>
+<script>
+  requireRole(['admin','owner']); // allow owner to view admin panel
+  renderNav('topNav');
+</script>
 </head><body>
+  <div id="topNav"></div>
 <div class="container">
   <div class="topbar">
     <a href="owner.html">Go to Owner (test)</a>
