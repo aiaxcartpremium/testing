@@ -15,7 +15,17 @@ function saveSession(s){ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
 function getSession(){ try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch{ return null; } }
 function clearSession(){ localStorage.removeItem(SESSION_KEY); }
 
-/* ---------- auth helpers (no magic link; we just set the role+uuid) ---------- */
+/* ---------- expose for index.html ---------- */
+function loginWithUid(role, uuid){
+  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if(!UUID_RE.test(uuid)) return alert('Invalid UUID');
+  if(role!=='owner' && role!=='admin') return alert('Invalid role');
+  saveSession({ role, uuid });
+  location.href = role==='owner' ? 'owner.html' : 'admin.html';
+}
+window.__APP__ = Object.assign(window.__APP__||{}, { loginWithUid });
+
+/* ---------- auth helpers ---------- */
 async function requireRole(roles){
   const s = getSession();
   if(!s || !roles.includes(s.role)){ location.href = 'index.html'; throw new Error('not authorized'); }
@@ -49,7 +59,6 @@ const DURATIONS = [
 
 /* ---------- PRODUCTS ---------- */
 async function fetchProducts(){
-  // needs RLS policy: products_read (select to authenticated, anon)
   const { data, error } = await supabase.from('products').select('key,label').order('label');
   if(error){ console.error('products error', error); return []; }
   return data || [];
@@ -89,7 +98,6 @@ async function ownerAddStockSubmit(e){
   if(!duration_code) return alert('Please select duration');
   if(quantity<1) return alert('Quantity must be at least 1');
 
-  // Insert into stocks (owner-scoped). Your RLS should allow owner to insert.
   const payload = { product_key, account_type, duration_code, quantity, email, password, profile_name, pin, notes };
   const { error } = await supabase.from('stocks').insert([payload]);
   if(error){ console.error(error); return alert('Add stock failed'); }
@@ -98,19 +106,16 @@ async function ownerAddStockSubmit(e){
   e.target.reset();
   fillStaticSelectsOwner();
   await fillProductsSelect(qs('#productSelect'));
-  // refresh owner tabs if visible
   ownerRenderStocks();
 }
 
 /* ---------- OWNER: Stocks summary (with remove one) ---------- */
 async function fetchStocksSummaryOwner(){
-  // Try server view first (stocks_summary), else compute client side
   let rows=[], error=null;
   ({ data: rows, error } = await supabase.from('stocks_summary')
     .select('product_key,account_type,duration_code,total_qty').order('product_key'));
 
   if(error){
-    // fallback: select all stocks (owner rows only via RLS) and group in JS
     const res = await supabase.from('stocks').select('product_key,account_type,duration_code,quantity');
     if(res.error){ console.error(res.error); return []; }
     const map = new Map();
@@ -159,15 +164,10 @@ async function ownerRenderStocks(){
     on(btn,'click', async ()=>{
       const row = JSON.parse(decodeURIComponent(btn.dataset.rem));
       if(!confirm(`Remove 1 from ${row.product_key} • ${row.account_type} • ${row.duration_code}?`)) return;
-      // Prefer an RPC that decrements safely
       const { error } = await supabase.rpc('remove_one_stock', {
-        p_product: row.product_key,
-        p_type: row.account_type,
-        p_duration: row.duration_code
+        p_product: row.product_key, p_type: row.account_type, p_duration: row.duration_code
       });
       if(error){
-        console.warn('RPC remove_one_stock missing, falling back to raw delete (may fail with RLS).', error);
-        // fallback: try to delete one raw row with quantity>0
         const { error: delErr } = await supabase
           .from('stocks')
           .delete()
@@ -185,12 +185,12 @@ async function ownerRenderStocks(){
 
 /* ---------- OWNER: Records (editable + Add days + CSV) ---------- */
 async function ownerFetchRecords(){
-  // owner can see all their sales via list_my_sales(owner_uuid) or direct select with RLS
-  // We try RPC first:
   let rows=[], error=null;
   ({ data: rows, error } = await supabase.rpc('list_my_sales', { p_owner: currentUUID() }));
   if(error){
-    const res = await supabase.from('sales').select('id,product_key,account_type,created_at,expires_at,buyer_link,price').order('id',{ascending:false}).limit(500);
+    const res = await supabase.from('sales')
+      .select('id,product_key,account_type,created_at,expires_at,buyer_link,price')
+      .order('id',{ascending:false}).limit(500);
     if(res.error){ console.error(res.error); return []; }
     rows = res.data;
   }
@@ -270,12 +270,10 @@ async function ownerRenderRecords(){
 
 /* ---------- ADMIN: Available Stocks + Refresh ---------- */
 async function adminFetchAvailable(){
-  // Prefer a dedicated view (owner-safe) named public.stocks_available_for_admin
   let rows=[], error=null;
   ({data: rows, error} = await supabase.from('stocks_available_for_admin')
     .select('product_key,account_type,duration_code,total_qty').order('product_key'));
   if(error){
-    // fallback to public.stocks_summary or direct stocks (depending on your RLS)
     ({data: rows, error} = await supabase.from('stocks_summary')
       .select('product_key,account_type,duration_code,total_qty').order('product_key'));
     if(error){ console.warn('No admin-safe view; falling back may fail with RLS.', error); rows = []; }
@@ -315,7 +313,6 @@ async function adminRefreshAll(){
 
 /* ---------- ADMIN: Get Account (filtered by in-stock) ---------- */
 async function adminFillFormOptions(){
-  // Only products/types that are currently in-stock
   const productSel = qs('#adminProductSelect');
   const typeSel    = qs('#adminTypeSelect');
   const durSel     = qs('#adminDurationSelect');
@@ -323,14 +320,13 @@ async function adminFillFormOptions(){
 
   const available = await adminFetchAvailable();
 
-  // products
   const uniqProd = [...new Set(available.map(r=>r.product_key))];
   const products = await fetchProducts();
   const labelOf  = (key)=> products.find(p=>p.key===key)?.label || key;
   productSel.innerHTML = `<option value="" disabled selected>Select product</option>` +
     uniqProd.map(k=>`<option value="${k}">${labelOf(k)}</option>`).join('');
 
-  // when product changes, types and durations shrink to what’s available for that product
+  // when product changes, types and durations shrink to what's available
   on(productSel,'change', ()=>{
     const p = productSel.value;
     const sub = available.filter(r=>r.product_key===p);
@@ -340,7 +336,7 @@ async function adminFillFormOptions(){
 
     const durs = [...new Set(sub.map(r=>r.duration_code))];
     durSel.innerHTML = durs.map(d=>`<option value="${d}">${d}</option>`).join('');
-  }, { once:true }); // will re-bind on refresh
+  }, { once:true });
 }
 async function adminGetAccount(){
   const product_key  = qs('#adminProductSelect')?.value;
@@ -355,7 +351,6 @@ async function adminGetAccount(){
     p_duration: duration_code
   });
   if(error){ console.error(error); return alert('get_account failed'); }
-  // Expecting a single row with credentials + expiry
   const r = (data&&data[0]) || null;
   const out = qs('#adminCreds');
   if(out){
@@ -371,7 +366,7 @@ async function adminGetAccount(){
       `;
     }
   }
-  await adminRefreshAll(); // decrement reflected
+  await adminRefreshAll(); // reflect decrement
 }
 
 /* ---------- ADMIN: My Buyers Record ---------- */
@@ -405,45 +400,21 @@ async function adminRenderMySales(){
   `;
 }
 
-/* ---------- Login page (inline inputs) ---------- */
-function bootLogin(){
-  const ownerIn = qs('#ownerUUIDInput');
-  const adminIn = qs('#adminUUIDInput');
-  const btnOwner = qs('#btnOwnerLogin');
-  const btnAdmin = qs('#btnAdminLogin');
-
-  on(btnOwner,'click', async ()=>{
-    const uuid = ownerIn.value.trim();
-    if(!uuid) return alert('Enter owner UUID');
-    saveSession({ role:'owner', uuid });
-    location.href = 'owner.html';
-  });
-  on(btnAdmin,'click', async ()=>{
-    const uuid = adminIn.value.trim();
-    if(!uuid) return alert('Enter admin UUID');
-    saveSession({ role:'admin', uuid });
-    location.href = 'admin.html';
-  });
-}
-
 /* ---------- Owner page boot ---------- */
 async function bootOwner(){
-  await requireRole(['owner']); // only owner, but owner can still go to Admin via link
-  // nav
+  await requireRole(['owner']); // change to ['owner','admin'] if you want admin to view too
   on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
   on(qs('#goAdmin'), 'click', ()=>{ location.href='admin.html'; });
 
-  // Add Stock
   fillStaticSelectsOwner();
   await fillProductsSelect(qs('#productSelect'));
   on(qs('#addStockForm'), 'submit', ownerAddStockSubmit);
 
-  // Tabs
   on(qs('#tabAdd'),    'click', ()=>showOwnerTab('add'));
   on(qs('#tabStocks'), 'click', ()=>showOwnerTab('stocks'));
   on(qs('#tabRecords'),'click', ()=>showOwnerTab('records'));
 
-  showOwnerTab('add'); // default
+  showOwnerTab('add');
   ownerRenderStocks();
   ownerRenderRecords();
 }
@@ -459,7 +430,7 @@ function showOwnerTab(which){
 
 /* ---------- Admin page boot ---------- */
 async function bootAdmin(){
-  await requireRole(['admin','owner']); // owner is allowed to view admin page per your last request? (If not, change to ['admin'])
+  await requireRole(['admin']); // strictly admin-only
   on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
   on(qs('#goOwner'),  'click', ()=>{ location.href='owner.html'; });
 
@@ -470,10 +441,11 @@ async function bootAdmin(){
   on(qs('#btnGetAccount'),'click', adminGetAccount);
 }
 
-/* ---------- Router ---------- */
+/* ---------- Router (detect by existing elements) ---------- */
 (function(){
-  // detect page by body data-attr or existing elements
-  if(qs('#loginPage'))  return bootLogin();
-  if(qs('#ownerPage'))  return bootOwner();
-  if(qs('#adminPage'))  return bootAdmin();
+  // If the page has owner form elements, we're on owner.html
+  if (qs('#addStockForm') || qs('#ownerPage')) return void bootOwner();
+  // If it has admin widgets, we're on admin.html
+  if (qs('#adminProductSelect') || qs('#adminPage')) return void bootAdmin();
+  // index.html uses inline script for toggles; nothing to boot here
 })();
