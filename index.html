@@ -32,9 +32,9 @@
       <!-- OWNER -->
       <div class="tile">
         <button class="btn" id="btnOwner">Login as Owner</button>
-        <form class="form" id="formOwner">
+        <form class="form" id="formOwner" autocomplete="off">
           <label for="ownerUUID">Owner UUID</label>
-          <input id="ownerUUID" placeholder="paste owner UUID" autocomplete="off"/>
+          <input id="ownerUUID" placeholder="paste owner UUID"/>
           <div class="row">
             <button class="btn" type="submit" style="flex:1" id="btnOwnerLogin">Continue</button>
           </div>
@@ -44,9 +44,9 @@
       <!-- ADMIN -->
       <div class="tile">
         <button class="btn" id="btnAdmin">Login as Admin</button>
-        <form class="form" id="formAdmin">
+        <form class="form" id="formAdmin" autocomplete="off">
           <label for="adminUUID">Admin UUID</label>
-          <input id="adminUUID" placeholder="paste admin UUID" autocomplete="off"/>
+          <input id="adminUUID" placeholder="paste admin UUID"/>
           <div class="row">
             <button class="btn" type="submit" style="flex:1" id="btnAdminLogin">Continue</button>
           </div>
@@ -55,7 +55,8 @@
     </div>
   </div>
 
-  <!-- config (keys/ids) then app -->
+  <!-- Supabase UMD + config + app -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>
