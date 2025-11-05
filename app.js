@@ -1,69 +1,112 @@
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { SUPA_URL, SUPA_ANON_KEY } from "./config.js";
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-export const supa = createClient(SUPA_URL, SUPA_ANON_KEY);
+const sb = createClient(window.SB_URL, window.SB_ANON);
+window.sb = sb; // quick access in console
 
-// tiny session using localStorage
-export const setRole = (role, uid) => { localStorage.role = role; localStorage.uid = uid; };
-export const getRole = () => localStorage.role;
-export const getUID  = () => localStorage.uid;
-export const logout  = () => { localStorage.clear(); location.href = "./index.html"; };
+// storage helpers
+const S = {
+  set(k,v){ localStorage.setItem(k, JSON.stringify(v)); },
+  get(k){ try{return JSON.parse(localStorage.getItem(k));}catch{return null} },
+  del(k){ localStorage.removeItem(k) }
+};
 
-export const fmt = d => d ? new Date(d).toLocaleString() : "";
+export function loginAs(role){
+  const label = role==='owner' ? 'Owner UUID' : 'Admin UUID';
+  const def = role==='owner' ? window.ID_OWNER : window.ID_ADMIN1;
+  const uid = prompt(`${label}:`, def);
+  if(!uid) return;
 
-export function toast(msg){
-  const el = document.getElementById("toast");
-  if(!el) return alert(msg);
-  el.textContent = msg; el.classList.add("show");
-  setTimeout(()=>el.classList.remove("show"),1500);
+  S.set('role', role);
+  S.set('uid', uid);
+
+  if(role==='owner') location.href = 'owner.html';
+  else location.href = 'admin.html';
 }
 
-// products (for Owner add-stock dropdown)
-export async function fetchProducts(){
-  const { data, error } = await supa.from("products").select("key,label").order("label");
-  if(error) throw error; return data || [];
+export function logout(){
+  S.del('role'); S.del('uid');
+  location.href = 'index.html';
 }
 
-// summarize available stocks for Admin page
-export async function fetchAvailableSummary(){
-  const { data, error } = await supa.from("stocks")
-    .select("product_key,account_type,quantity")
-  if(error) throw error;
-  const map = new Map();
-  for(const r of (data||[])){
-    const k = `${r.product_key}|${r.account_type}`;
-    map.set(k, (map.get(k)||0) + (r.quantity||0));
+export function assertRole(allowed){
+  const role = S.get('role');
+  const uid  = S.get('uid');
+  if(!role || !uid || (allowed && !allowed.includes(role))){
+    logout(); return null;
   }
-  return Array.from(map.entries())
-         .map(([k,qty])=>({ product_key:k.split("|")[0], account_type:k.split("|")[1], qty }))
-         .filter(x=>x.qty>0);
+  return {role, uid};
 }
 
-// stocks (Owner)
-export async function addStock(row){ const { error } = await supa.from("stocks").insert(row); if(error) throw error; }
-export async function listStocks(){
-  const { data, error } = await supa.from("stocks")
-    .select("id,product_key,account_type,quantity,duration_days,auto_renew,email,profile_name,pin,expires_at,created_at")
-    .order("id",{ascending:false});
-  if(error) throw error; return data || [];
+// ---------- Products & Summary ----------
+export async function fetchProducts(){
+  const {data, error} = await sb.from('products').select('key,label').order('label');
+  if(error){ console.error(error); return []; }
+  return data;
 }
-export async function deleteStock(id){ const { error } = await supa.from("stocks").delete().eq("id", id); if(error) throw error; }
 
-// sales (Owner/Admin)
-export async function fetchAllSales(){
-  const { data, error } = await supa.from("sales")
-    .select("id, product_key, account_type, email, password, profile_name, pin, buyer_link, price, created_at, expires_at, admin_id")
-    .order("id",{ascending:false});
-  if(error) throw error; return data || [];
+export async function fetchStockSummary(){
+  const {data, error} = await sb.from('stock_summary').select('*');
+  if(error){ console.error(error); return []; }
+  return data;
 }
-export async function updateSale(id, patch){ const { error } = await supa.from("sales").update(patch).eq("id", id); if(error) throw error; }
-export async function addDaysToSale(id, days){ const { error } = await supa.rpc("add_days_to_sale",{ p_id:id, p_days:days }); if(error) throw error; }
-export async function listMySales(adminId){ const { data, error } = await supa.rpc("list_my_sales",{ p_admin:adminId }); if(error) throw error; return data||[]; }
-export async function rpcGetAccount(payload){ const { data, error } = await supa.rpc("get_account", payload); if(error) throw error; return data && data[0]; }
 
-// CSV util
-export function toCSV(rows){
-  if(!rows.length) return "";
-  const cols = Object.keys(rows[0]);
-  return [cols.join(","), ...rows.map(r => cols.map(c => JSON.stringify(r[c] ?? "")).join(","))].join("\n");
+// ---------- Owner actions ----------
+export async function addStockBulk({owner, product, type, qty, email, password, profile, pin, duration}){
+  const { data, error } = await sb.rpc('add_stock_bulk', {
+    p_owner: owner,
+    p_product: product,
+    p_account_type: type,
+    p_qty: qty,
+    p_email: email || null,
+    p_password: password || null,
+    p_profile: profile || null,
+    p_pin: pin || null,
+    p_duration: duration || null
+  });
+  if(error) throw error;
+  return data;
 }
+
+export async function listOwnerSales(owner){
+  // owner sees ALL sales (created by any admin) tied to them
+  const { data, error } = await sb.from('sales')
+   .select('id,product_key,account_type,created_at,expires_at,buyer_link,price,admin_id')
+   .eq('owner_id', owner).order('id', {ascending:false}).limit(200);
+  if(error) throw error;
+  return data || [];
+}
+
+export async function deleteStock(owner, stockId){
+  const { error } = await sb.rpc('delete_stock', { p_owner: owner, p_stock_id: stockId });
+  if(error) throw error;
+}
+
+// ---------- Admin actions ----------
+export async function listMySales(admin){
+  const { data, error } = await sb.from('sales')
+   .select('id,product_key,account_type,created_at,expires_at,buyer_link,price')
+   .eq('admin_id', admin).order('id',{ascending:false}).limit(200);
+  if(error) throw error;
+  return data || [];
+}
+
+export async function getAccount({admin, product, type, duration}){
+  // your existing RPC name/shape; adjust param names if yours differ
+  const { data, error } = await sb.rpc('get_account', {
+    p_admin: admin,
+    p_product: product,
+    p_type: type,
+    p_duration: duration  // e.g., '7days','1m','auto-renew'
+  });
+  if(error) throw error;
+  return data; // expected: one row with creds + expires_at
+}
+
+// expose to inline handlers
+window.__APP__ = { loginAs, logout, assertRole,
+  fetchProducts, fetchStockSummary,
+  addStockBulk, listOwnerSales, deleteStock,
+  listMySales, getAccount
+};
+</script>
