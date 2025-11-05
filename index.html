@@ -3,103 +3,81 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AiaStocks Management</title>
-  <link rel="stylesheet" href="./style.css"/>
+  <title>Login</title>
   <style>
-    .btn-lg{
-      width:100%;
-      min-height:68px;
-      border-radius:16px;
-      background:linear-gradient(180deg,#ffe5ec 0%,#ffc2d1 100%);
-      color:#8a1049;
-      border:1px solid #ffc2d1;
-      box-shadow:0 10px 24px rgba(255,194,209,.55);
-      font-weight:800;font-size:20px;
-    }
-    .btn-lg:active{transform:translateY(1px)}
-    .panel{padding:16px 0}
+    /* Minimal styles para walang makaharang sa click */
+    :root{--bg1:#ffe5ec;--bg2:#ffc2d1;--txt:#2b2b2b}
+    html,body{margin:0;padding:0;height:100%;font-family:system-ui,Segoe UI,Roboto,Arial}
+    .wrap{min-height:100%;background:linear-gradient(180deg,var(--bg1),var(--bg2));display:flex;align-items:flex-start;justify-content:center}
+    .card{width:clamp(320px,92vw,720px);margin:32px;padding:24px;border-radius:20px;background:#fff8f9;border:1px solid #ffd6e2;box-shadow:0 12px 28px rgba(255,156,181,.35);position:relative}
+    h1{margin:0 0 16px 0;font-size:48px;line-height:1}
+    p{margin:0 0 16px 0;color:#444}
+    .btn{display:block;width:100%;min-height:64px;border-radius:16px;border:1px solid #ffb3c6;background:linear-gradient(180deg,#ffe6ee,#ffc2d1);color:#8a1049;font-weight:800;font-size:18px;margin:10px 0;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
     .hidden{display:none!important}
-    .note{opacity:.75}
+    input{width:100%;height:52px;border-radius:12px;border:1px solid #e7b5c4;padding:0 14px;font-size:16px}
+    .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AiaStocks Management</h1>
-    <p>To login, choose a role then <b>type the UUID</b> to continue (no magic link).</p>
+  <div class="wrap">
+    <div class="card">
+      <h1>Login</h1>
+      <p>Pumili ng role tapos <b>itype ang UUID</b>. Walang magic link.</p>
 
-    <div class="panel">
-      <button id="chooseOwner" class="btn-lg">Login as Owner</button>
-    </div>
-    <div class="panel">
-      <button id="chooseAdmin" class="btn-lg">Login as Admin</button>
-    </div>
+      <button class="btn" onclick="showOwner()">Login as Owner</button>
+      <div id="ownerForm" class="hidden mt12">
+        <label>Owner UUID</label>
+        <input id="ownerUUID" placeholder="paste owner UUID"/>
+        <button class="btn mt12" onclick="loginOwner()">Login</button>
+      </div>
 
-    <!-- Owner form -->
-    <div id="ownerForm" class="hidden">
-      <h2>Owner UUID</h2>
-      <input id="ownerUUID" class="input" placeholder="paste owner UUID"/>
-      <div class="mt-12"><button class="btn" id="ownerLoginBtn">Login</button></div>
+      <button class="btn mt16" onclick="showAdmin()">Login as Admin</button>
+      <div id="adminForm" class="hidden mt12">
+        <label>Admin UUID</label>
+        <input id="adminUUID" placeholder="paste admin UUID"/>
+        <button class="btn mt12" onclick="loginAdmin()">Login</button>
+      </div>
     </div>
-
-    <!-- Admin form -->
-    <div id="adminForm" class="hidden mt-16">
-      <h2>Admin UUID</h2>
-      <input id="adminUUID" class="input" placeholder="paste admin UUID"/>
-      <div class="mt-12"><button class="btn" id="adminLoginBtn">Login</button></div>
-      <p class="note mt-12">Tip: Admin 1 or Admin 2 UUID allowed.</p>
-    </div>
-
-    
   </div>
 
-  <!-- helpers (logout, session) -->
   <script>
-    // simple session helpers kept inline to avoid loading issues
-    const FIXED = {
+    // FIXED IDs mo
+    const IDS = {
       owner:  '8cd15b4b-0755-4843-a8d5-2652fa408fe5',
       admin1: '4e63c32b-cc75-48de-b111-e8a977d868a2',
       admin2: '20851a7b-ef92-41a1-80d1-d2a6081396d5',
     };
-    function setSession(role, user_id){
+
+    // Helpers
+    function setSession(role, uid){
       localStorage.setItem('role', role);
-      localStorage.setItem('user_id', user_id);
+      localStorage.setItem('user_id', uid);
     }
-  </script>
-
-  <!-- page logic -->
-  <script>
-    const chooseOwner = document.getElementById('chooseOwner');
-    const chooseAdmin = document.getElementById('chooseAdmin');
-    const ownerForm   = document.getElementById('ownerForm');
-    const adminForm   = document.getElementById('adminForm');
-
-    // make sure clicks always work
-    chooseOwner.addEventListener('click', () => {
-      ownerForm.classList.remove('hidden');
-      adminForm.classList.add('hidden');
+    function showOwner(){
+      document.getElementById('ownerForm').classList.remove('hidden');
+      document.getElementById('adminForm').classList.add('hidden');
       document.getElementById('ownerUUID').focus();
-    });
-    chooseAdmin.addEventListener('click', () => {
-      adminForm.classList.remove('hidden');
-      ownerForm.classList.add('hidden');
+    }
+    function showAdmin(){
+      document.getElementById('adminForm').classList.remove('hidden');
+      document.getElementById('ownerForm').classList.add('hidden');
       document.getElementById('adminUUID').focus();
-    });
-
-    document.getElementById('ownerLoginBtn').addEventListener('click', () => {
-      const val = (document.getElementById('ownerUUID').value || '').trim();
-      if (!val) return alert('Please paste the Owner UUID.');
-      if (val !== FIXED.owner) return alert('Wrong Owner UUID.');
+    }
+    function loginOwner(){
+      const val = (document.getElementById('ownerUUID').value||'').trim();
+      if(!val){alert('Please paste the Owner UUID.');return}
+      if(val !== IDS.owner){alert('Wrong Owner UUID.');return}
       setSession('owner', val);
       location.href = './owner.html';
-    });
-
-    document.getElementById('adminLoginBtn').addEventListener('click', () => {
-      const val = (document.getElementById('adminUUID').value || '').trim();
-      if (!val) return alert('Please paste an Admin UUID.');
-      if (val !== FIXED.admin1 && val !== FIXED.admin2) return alert('Wrong Admin UUID.');
+    }
+    function loginAdmin(){
+      const val = (document.getElementById('adminUUID').value||'').trim();
+      if(!val){alert('Please paste an Admin UUID.');return}
+      if(val !== IDS.admin1 && val !== IDS.admin2){alert('Wrong Admin UUID.');return}
       setSession('admin', val);
       location.href = './admin.html';
-    });
+    }
   </script>
 </body>
 </html>
