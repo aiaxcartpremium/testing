@@ -1,75 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AiaxStock Login</title>
-<style>
-  :root{
-    --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35);
-  }
-  body{
-    margin:0;
-    font-family:'Poppins',system-ui,Segoe UI,Arial;
-    background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);
-    display:flex;justify-content:center;align-items:center;
-    height:100vh;
-  }
-  .container{
-    background:#fff;
-    padding:30px 28px;
-    border-radius:18px;
-    box-shadow:var(--shadow);
-    width:90%;max-width:400px;
-    text-align:center;
-  }
-  h1{margin-bottom:8px;font-size:28px;color:#b3005a;}
-  p{font-size:15px;color:#444;margin-bottom:20px;}
-  label{display:block;text-align:left;font-weight:600;margin:10px 0 5px;}
-  input{
-    width:100%;
-    padding:12px;
-    border:1px solid #e8d3db;
-    border-radius:10px;
-    font-size:15px;
-  }
-  .btn{
-    width:100%;
-    padding:15px;
-    margin-top:18px;
-    border:none;
-    border-radius:12px;
-    font-weight:700;
-    font-size:17px;
-    color:#fff;
-    background:linear-gradient(180deg,var(--pink2),var(--pink3));
-    cursor:pointer;
-  }
-  .btn:active{transform:translateY(1px);}
-  .divider{margin:25px 0;font-weight:600;color:#888;font-size:13px;}
-</style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login • AiaxStock</title>
+<link rel="preconnect" href="https://esm.sh">
+<link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <div class="container" id="loginPage">
-    <h1>AiaxStock</h1>
-    <p>Login to continue</p>
+<body data-page="login">
+  <div class="wrap">
+    <h1>Login</h1>
+    <p>Choose a role then type the <b>UUID</b> to continue.</p>
 
-    <label>Owner UUID</label>
-    <input id="ownerUUIDInput" placeholder="enter owner UUID">
+    <div class="tiles">
+      <!-- OWNER -->
+      <div class="tile">
+        <button class="btn" id="btnOwnerOpen">Login as Owner</button>
+        <form class="form" id="formOwner" autocomplete="off">
+          <label for="ownerUUID">Owner UUID</label>
+          <input id="ownerUUID" placeholder="Type owner UUID…" autocomplete="off"/>
+          <div class="row">
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+          </div>
+        </form>
+      </div>
 
-    <button class="btn" id="btnOwnerLogin">Login as Owner</button>
-
-    <div class="divider">or</div>
-
-    <label>Admin UUID</label>
-    <input id="adminUUIDInput" placeholder="enter admin UUID">
-
-    <button class="btn" id="btnAdminLogin">Login as Admin</button>
+      <!-- ADMIN -->
+      <div class="tile">
+        <button class="btn" id="btnAdminOpen">Login as Admin</button>
+        <form class="form" id="formAdmin" autocomplete="off">
+          <label for="adminUUID">Admin UUID</label>
+          <input id="adminUUID" placeholder="Type admin UUID…" autocomplete="off"/>
+          <div class="row">
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
-  <!-- Config keys -->
   <script src="config.js"></script>
-  <!-- Main logic -->
-  <script type="module" src="app.js?v=20251106c" defer></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
