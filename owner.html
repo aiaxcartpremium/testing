@@ -1,84 +1,159 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Owner Panel</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script defer src="config.js"></script>
-  <script defer src="catalog.js"></script>
-  <script defer src="common.js"></script>
-  <script defer src="owner.js"></script>
-</head>
-<body>
-<header><h1>Owner Panel</h1><nav>
-  <a href="index.html">Home</a>
-  <button id="logoutBtn">Logout</button>
-</nav></header>
-<main>
-  <section class="card">
-    <h2>Add Stocks</h2>
-    <form id="addForm" class="grid2">
-      <label>Category & Product
-        <select id="product_key"></select>
-      </label>
-      <label>Account type
-        <select id="account_type">
+<!doctype html><html><head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Owner Panel • Aiax Stocks</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head><body>
+<div class="container grid">
+  <div class="btnrow"><button class="secondary" onclick="logout()">Logout</button><a class="badge" href="admin.html">Go to Admin (test)</a></div>
+  <div class="card grid">
+    <h1>Owner • Add Stock</h1>
+    <div class="grid grid-2">
+      <div>
+        <label>Product</label>
+        <select id="product"></select>
+      </div>
+      <div>
+        <label>Account type</label>
+        <select id="acctType">
           <option>shared profile</option>
           <option>solo profile</option>
           <option>shared account</option>
           <option>solo account</option>
         </select>
-      </label>
-      <label>Plan duration
-        <select id="plan">
+      </div>
+      <div><label>Duration choice</label>
+        <select id="duration">
           <option value="7d">7 days</option><option value="14d">14 days</option>
-          <option value="1m">1 month</option><option value="2m">2 months</option>
-          <option value="3m">3 months</option><option value="4m">4 months</option>
-          <option value="5m">5 months</option><option value="6m">6 months</option>
-          <option value="7m">7 months</option><option value="8m">8 months</option>
-          <option value="9m">9 months</option><option value="10m">10 months</option>
-          <option value="11m">11 months</option><option value="12m">12 months</option>
+          <option value="1m">1 month</option><option value="2m">2 months</option><option value="3m">3 months</option>
+          <option value="4m">4 months</option><option value="5m">5 months</option><option value="6m">6 months</option>
+          <option value="7m">7 months</option><option value="8m">8 months</option><option value="9m">9 months</option>
+          <option value="10m">10 months</option><option value="11m">11 months</option><option value="12m">12 months</option>
         </select>
-      </label>
-      <label>Quantity
-        <input type="number" id="qty" value="1" min="1" max="50"/>
-      </label>
-      <label>Email (optional)<input id="email"/></label>
-      <label>Password (optional)<input id="password"/></label>
-      <label>PIN (optional)<input id="pin"/></label>
-      <label>Notes (optional)<input id="notes"/></label>
-      <button class="btn" type="submit">Add</button>
-    </form>
-    <p class="muted">Quantity creates identical rows. `expires_at` saved from plan.</p>
-  </section>
-
-  <section class="card">
-    <h2>Buyer Records</h2>
-    <div class="grid3">
-      <input id="filterSocial" placeholder="buyer social..."/>
-      <select id="filterProduct"></select>
-      <button class="btn" id="searchBuyer">Search</button>
+      </div>
+      <div><label>Quantity</label><input id="qty" type="number" min="1" value="1"></div>
+      <div><label>Email (optional)</label><input id="email" placeholder="login email"></div>
+      <div><label>Password (optional)</label><input id="password" placeholder="login password"></div>
+      <div><label>Profile (optional)</label><input id="profile" placeholder="profile name"></div>
+      <div><label>PIN (optional)</label><input id="pin" placeholder="profile pin"></div>
+      <div class="grid" style="grid-column:1/-1"><label>Notes</label><textarea id="notes" rows="2" placeholder="any notes"></textarea></div>
     </div>
-    <table id="buyerTbl">
-      <thead><tr><th>When</th><th>Product</th><th>Buyer Social</th><th>Price</th><th>Admin</th></tr></thead>
+    <div class="btnrow"><button id="btnAdd">Add stock</button></div>
+    <div id="msg" class="small"></div>
+  </div>
+
+  <div class="card grid">
+    <h2>My Sales</h2>
+    <div class="btnrow">
+      <button class="secondary" onclick="prev()">◀ Prev</button>
+      <span id="page" class="badge">page 1</span>
+      <button class="secondary" onclick="next()">Next ▶</button>
+    </div>
+    <table class="table" id="salesTbl">
+      <thead><tr>
+        <th>ID</th><th>When</th><th>Product</th><th>Type</th>
+        <th>Buyer</th><th>Price</th><th>Expires</th>
+      </tr></thead><tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card grid">
+    <h2>Quick Stock (sensitive values masked)</h2>
+    <table class="table" id="stockTbl">
+      <thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>Updated</th></tr></thead>
       <tbody></tbody>
     </table>
-    <div class="pager">
-      <button id="prevBuyer">Prev</button>
-      <span id="buyerPage"></span>
-      <button id="nextBuyer">Next</button>
-    </div>
-  </section>
+  </div>
+</div>
 
-  <section class="card">
-    <h2>Admin Records (raw)</h2>
-    <table id="adminTbl">
-      <thead><tr><th>When</th><th>Product</th><th>Stock ID</th><th>Admin</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </section>
-</main>
-</body>
-</html>
+<script src="config.js"></script>
+<script>
+let page=1, limit=15;
+
+async function requireOwner(){
+  const { data } = await sb.auth.getSession();
+  if(!data.session){ location.href='index.html'; return null; }
+  const uid = data.session.user.id;
+  const prof = await sb.from('profiles').select('role').eq('id', uid).maybeSingle();
+  if(prof.error || prof.data?.role!=='owner'){ location.href='index.html'; return null; }
+  return uid;
+}
+
+async function loadProducts(){
+  const { data } = await sb.from('products').select('product_key,label').order('category');
+  const sel = document.getElementById('product'); sel.innerHTML='';
+  (data||[]).forEach(p=>{
+    const o=document.createElement('option'); o.value=p.product_key; o.textContent=p.label; sel.appendChild(o);
+  });
+}
+
+document.getElementById('btnAdd').onclick = async () => {
+  const msg = document.getElementById('msg');
+  msg.textContent='Saving...';
+  const { data:session } = await sb.auth.getSession();
+  const owner_id = session?.session?.user?.id;
+  const payload = {
+    owner_id,
+    product_key: product.value,
+    account_type: acctType.value,
+    duration_choice: duration.value,
+    quantity: Number(qty.value||1),
+    email: email.value||null,
+    password: password.value||null,
+    profile_name: profile.value||null,
+    pin: pin.value||null,
+    notes: notes.value||null
+  };
+  const { error } = await sb.from('stocks').insert(payload);
+  msg.textContent = error ? error.message : 'Added ✔';
+  if(!error){ await loadStock(); }
+};
+
+async function loadSales(){
+  document.getElementById('page').textContent='page '+page;
+  const from=(page-1)*limit;
+  const { data, error } = await sb
+    .from('sales')
+    .select('id,created_at,product_key,account_type,buyer_social,price,expires_at')
+    .order('created_at',{ascending:false})
+    .range(from, from+limit-1);
+  const tb = document.querySelector('#salesTbl tbody'); tb.innerHTML='';
+  (data||[]).forEach(r=>{
+    const tr=document.createElement('tr');
+    const short='#'+r.id;
+    tr.innerHTML=`<td><span class="badge">${short}</span></td>
+    <td>${new Date(r.created_at).toLocaleString()}</td>
+    <td>${r.product_key}</td><td>${r.account_type}</td>
+    <td>${r.buyer_social||''}</td><td>${r.price??''}</td>
+    <td>${r.expires_at?new Date(r.expires_at).toLocaleDateString():''}</td>`;
+    tb.appendChild(tr);
+  });
+}
+function next(){ page++; loadSales(); }
+function prev(){ page=Math.max(1,page-1); loadSales(); }
+
+async function loadStock(){
+  const { data, error } = await sb
+    .from('stocks')
+    .select('product_key,account_type,quantity,updated_at')
+    .order('updated_at',{ascending:false})
+    .limit(50);
+  const tb = document.querySelector('#stockTbl tbody'); tb.innerHTML='';
+  (data||[]).forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.product_key}</td><td>${r.account_type}</td><td>${r.quantity}</td>
+      <td>${new Date(r.updated_at).toLocaleString()}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function init(){
+  const ok = await requireOwner(); if(!ok) return;
+  await loadProducts();
+  await loadStock();
+  await loadSales();
+}
+function logout(){ sb.auth.signOut().then(()=>location.href='index.html'); }
+init();
+</script>
+</body></html>
