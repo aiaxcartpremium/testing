@@ -1,194 +1,241 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Owner • AiaxStock</title>
-  <link rel="stylesheet" href="./style.css"/>
-  <script type="module">
-    import {
-      getRole, logout, fetchProducts, addStock, listStocks, deleteStock,
-      fetchAllSales, updateSale, addDaysToSale, toCSV, toast
-    } from "./app.js";
-    import { DURATION_MAP } from "./config.js";
-
-    if(getRole()!=="owner"){ location.href="./index.html"; }
-
-    function switchTab(id){
-      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(p=>p.classList.add("hidden"));
-      document.getElementById("tab-"+id).classList.add("active");
-      document.getElementById("panel-"+id).classList.remove("hidden");
-    }
-
-    async function fillProducts(){
-      const list = await fetchProducts();
-      prod.innerHTML = '<option value="">Select…</option>' +
-        list.map(p=>`<option value="${p.key}">${p.label}</option>`).join('');
-    }
-
-    async function doAddStock(){
-      const payload = {
-        product_key: prod.value,
-        account_type: acctType.value,
-        duration_days: Number(DURATION_MAP[duration.value]||0),
-        auto_renew: duration.value==='auto',
-        quantity: Number(qty.value||1),
-        email: email.value||null,
-        password: password.value||null,
-        profile_name: profile.value||null,
-        pin: pin.value||null,
-        notes: notes.value||null,
-        expires_at: expires.value ? new Date(expires.value).toISOString() : null
-      };
-      if(!payload.product_key){ toast("Pick product"); return; }
-      await addStock(payload);
-      toast("Stock added");
-      await refreshStocks();
-    }
-
-    async function refreshStocks(){
-      const rows = await listStocks();
-      stocksBody.innerHTML = rows.map(r=>`
-        <tr>
-          <td>${r.id}</td>
-          <td>${r.product_key}</td>
-          <td>${r.account_type}</td>
-          <td>${r.quantity}</td>
-          <td>${r.duration_days}${r.auto_renew?' (auto)':''}</td>
-          <td>${r.profile_name||''}</td>
-          <td>${r.pin||''}</td>
-          <td>${r.email||''}</td>
-          <td>${r.expires_at? new Date(r.expires_at).toLocaleDateString(): ''}</td>
-          <td>
-            <button class="btn small secondary" onclick="removeStock(${r.id})">Remove</button>
-          </td>
-        </tr>`).join("");
-    }
-    window.removeStock = async (id)=>{
-      if(!confirm("Delete this stock row?")) return;
-      await deleteStock(id); toast("Deleted"); await refreshStocks();
-    };
-
-    async function refreshRecords(){
-      const rows = await fetchAllSales();
-      salesBody.innerHTML = rows.map(r=>`
-        <tr>
-          <td>${r.id}</td>
-          <td><input value="${r.product_key||''}" data-id="${r.id}" data-k="product_key"/></td>
-          <td><input value="${r.account_type||''}" data-id="${r.id}" data-k="account_type"/></td>
-          <td><input value="${r.email||''}" data-id="${r.id}" data-k="email"/></td>
-          <td><input value="${r.password||''}" data-id="${r.id}" data-k="password"/></td>
-          <td><input value="${r.profile_name||''}" data-id="${r.id}" data-k="profile_name"/></td>
-          <td><input value="${r.pin||''}" data-id="${r.id}" data-k="pin"/></td>
-          <td><input value="${r.buyer_link||''}" data-id="${r.id}" data-k="buyer_link"/></td>
-          <td><input value="${r.price||''}" data-id="${r.id}" data-k="price"/></td>
-          <td>${new Date(r.created_at).toLocaleString()}</td>
-          <td>${r.expires_at? new Date(r.expires_at).toLocaleDateString():''}</td>
-          <td>
-            <input type="number" min="1" placeholder="days" id="add-${r.id}" style="width:80px"/>
-            <button class="btn small" onclick="addDays(${r.id})">+Days</button>
-            <button class="btn small" onclick="saveRow(${r.id})">Save</button>
-          </td>
-        </tr>`).join("");
-    }
-    window.saveRow = async (id)=>{
-      const inputs = [...document.querySelectorAll(`[data-id="${id}"]`)];
-      const patch = {}; inputs.forEach(i => patch[i.dataset.k] = i.value);
-      await updateSale(id, patch); toast("Saved");
-    };
-    window.addDays = async (id)=>{
-      const v = Number(document.getElementById("add-"+id).value||0);
-      if(!v) return; await addDaysToSale(id, v); toast("+Days applied"); await refreshRecords();
-    };
-    window.exportCSV = async ()=>{
-      const rows = await fetchAllSales();
-      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
-      const url = URL.createObjectURL(blob); const a=document.createElement("a");
-      a.href=url; a.download="owner-sales.csv"; a.click(); URL.revokeObjectURL(url);
-    };
-
-    window.switchTab = switchTab;
-    window.logout = logout;
-    window.onload = async ()=>{ await fillProducts(); await refreshStocks(); await refreshRecords(); };
-  </script>
+<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Owner • AiaxStock</title>
+<link rel="preconnect" href="https://esm.sh">
+<style>
+  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --pink4:#FFC2D1; }
+  body{margin:0;font-family:system-ui,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}
+  .brand{font-weight:900;font-size:20px;color:#7a0033}
+  nav a{margin-right:16px;text-decoration:none;font-weight:700;color:#0066dd}
+  .btn{background:linear-gradient(180deg,var(--pink2),var(--pink3));border:none;color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
+  .card{background:#fff;border-radius:18px;box-shadow:0 12px 28px rgba(0,0,0,.08);padding:18px;margin:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  label{font-weight:700;margin-top:8px;display:block}
+  input,select,textarea{width:100%;padding:12px;border-radius:10px;border:1px solid #e9d1da;background:#fff}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px 10px;border-bottom:1px solid #eee; font-size:14px}
+  .tabs{display:flex;gap:8px;margin:0 16px}
+  .tab{padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #ffd1df;cursor:pointer;font-weight:700}
+  .tab.active{background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;border:none}
+  .muted{color:#777;font-size:13px}
+</style>
 </head>
 <body>
-  <div class="nav"><div class="nav-inner container">
-    <div class="brand">AiaxStock — Owner</div>
-    <div class="toolbar">
-      <!-- (owner can see Admin, but Admin page no longer links back here) -->
-      <a class="link" href="./admin.html">Go to Admin</a>
-      <button class="btn secondary" onclick="logout()">Logout</button>
+<header>
+  <div class="brand">AiaxStock Management — <b>Owner</b></div>
+  <nav>
+    <a href="admin.html">Go to Admin</a>
+    <button class="btn" onclick="__APP__.logout()">Logout</button>
+  </nav>
+</header>
+
+<div class="tabs">
+  <button class="tab active" data-tab="add">Add stock</button>
+  <button class="tab" data-tab="stocks">Stocks</button>
+  <button class="tab" data-tab="records">Records</button>
+</div>
+
+<section id="tab-add" class="card">
+  <h2>Add Stock</h2>
+  <div class="row3">
+    <div>
+      <label>Product</label>
+      <select id="p_product"></select>
     </div>
-  </div></div>
-
-  <div class="container">
-    <div class="tabs">
-      <button id="tab-add"    class="tab active" onclick="switchTab('add')">Add Stock</button>
-      <button id="tab-stocks" class="tab"        onclick="switchTab('stocks')">Stocks</button>
-      <button id="tab-records"class="tab"        onclick="switchTab('records')">Records</button>
+    <div>
+      <label>Account type</label>
+      <select id="p_type">
+        <option>shared profile</option>
+        <option>solo profile</option>
+        <option>shared account</option>
+        <option>solo account</option>
+        <option>invitation</option>
+        <option>head</option>
+        <option>edu</option>
+      </select>
     </div>
-
-    <!-- Add Stock -->
-    <section id="panel-add" class="panel card">
-      <h2>Add Stock</h2>
-      <div class="grid two">
-        <div><label>Product</label><select id="prod"></select></div>
-        <div><label>Account type</label>
-          <select id="acctType">
-            <option>shared profile</option><option>solo profile</option>
-            <option>shared account</option><option>solo account</option>
-          </select>
-        </div>
-        <div><label>Duration</label>
-          <select id="duration">
-            <option value="7d">7 days</option><option value="14d">14 days</option>
-            <option value="1m">1 month</option><option value="2m">2 months</option>
-            <option value="3m">3 months</option><option value="6m">6 months</option>
-            <option value="12m">12 months</option><option value="auto">Auto-renew</option>
-          </select>
-        </div>
-        <div><label>Quantity</label><input id="qty" type="number" value="1" min="1"/></div>
-        <div><label>Email (optional)</label><input id="email" placeholder="login email"/></div>
-        <div><label>Password (optional)</label><input id="password" placeholder="login password"/></div>
-        <div><label>Profile (optional)</label><input id="profile" placeholder="profile name"/></div>
-        <div><label>PIN (optional)</label><input id="pin" placeholder="profile pin"/></div>
-        <div><label>Expiry date (optional)</label><input id="expires" type="datetime-local"/></div>
-        <div><label>Notes</label><input id="notes" placeholder="any notes"/></div>
-      </div>
-      <div class="toolbar"><button class="btn" onclick="doAddStock()">Add stock</button></div>
-    </section>
-
-    <!-- Stocks -->
-    <section id="panel-stocks" class="panel card hidden">
-      <div class="toolbar"><h2>Stocks</h2><button class="btn small" onclick="location.reload()">Refresh</button></div>
-      <table class="table">
-        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Qty</th><th>Duration</th><th>Profile</th><th>PIN</th><th>Email</th><th>Expires</th><th>Actions</th></tr></thead>
-        <tbody id="stocksBody"></tbody>
-      </table>
-    </section>
-
-    <!-- Records -->
-    <section id="panel-records" class="panel card hidden">
-      <div class="toolbar">
-        <h2>Sales Records</h2>
-        <div>
-          <button class="btn small" onclick="location.reload()">Refresh</button>
-          <button class="btn small secondary" onclick="exportCSV()">Export CSV</button>
-        </div>
-      </div>
-      <table class="table">
-        <thead><tr>
-          <th>ID</th><th>Product</th><th>Type</th><th>Email</th><th>Password</th>
-          <th>Profile</th><th>PIN</th><th>Buyer link</th><th>Price</th>
-          <th>Created</th><th>Expires</th><th>Actions</th>
-        </tr></thead>
-        <tbody id="salesBody"></tbody>
-      </table>
-    </section>
+    <div>
+      <label>Duration</label>
+      <select id="p_duration">
+        <option value="7days">7 days</option>
+        <option value="14days">14 days</option>
+        <option value="1m">1 month</option>
+        <option value="2m">2 months</option>
+        <option value="3m">3 months</option>
+        <option value="4m">4 months</option>
+        <option value="5m">5 months</option>
+        <option value="6m">6 months</option>
+        <option value="7m">7 months</option>
+        <option value="8m">8 months</option>
+        <option value="9m">9 months</option>
+        <option value="10m">10 months</option>
+        <option value="11m">11 months</option>
+        <option value="12m">12 months</option>
+        <option value="auto-renew">auto-renew</option>
+      </select>
+      <div class="muted" id="expiryHint"></div>
+    </div>
   </div>
 
-  <div id="toast" class="toast"></div>
-</body>
-</html>
+  <div class="row3" style="margin-top:8px">
+    <div><label>Quantity</label><input id="p_qty" type="number" min="1" value="1"/></div>
+    <div><label>Email (optional)</label><input id="p_email" placeholder="login email"/></div>
+    <div><label>Password (optional)</label><input id="p_password" placeholder="login password"/></div>
+    <div><label>Profile (optional)</label><input id="p_profile" placeholder="profile name"/></div>
+    <div><label>PIN (optional)</label><input id="p_pin" placeholder="profile pin"/></div>
+    <div><label>Notes</label><input id="p_notes" placeholder="any notes"/></div>
+  </div>
+
+  <div style="margin-top:12px">
+    <button class="btn" id="btnAdd">Add stock</button>
+  </div>
+</section>
+
+<section id="tab-stocks" class="card" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h2>Current Stocks</h2>
+    <button class="btn" id="btnRefreshStocks">Refresh</button>
+  </div>
+  <table id="tblStocks"><thead>
+    <tr><th>ID</th><th>Product</th><th>Type</th><th>Expires</th><th></th></tr>
+  </thead><tbody></tbody></table>
+  <div class="muted">Tap “Remove” if you encoded a wrong row.</div>
+</section>
+
+<section id="tab-records" class="card" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h2>All Sales (by any Admin)</h2>
+    <button class="btn" id="btnExport">Export CSV</button>
+  </div>
+  <table id="tblSales"><thead>
+    <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer</th><th>Price</th><th>Admin</th></tr>
+  </thead><tbody></tbody></table>
+</section>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+<script>
+const A = window.__APP__;
+const ctx = A.assertRole(['owner']); if(!ctx) throw 0;
+const uid = ctx.uid;
+
+const el = s=>document.querySelector(s);
+const expiryHint = el('#expiryHint');
+
+function previewExpiry(){
+  const map = {
+    '7days':7,'14days':14,
+    '1m':'1 month','2m':'2 months','3m':'3 months','4m':'4 months','5m':'5 months',
+    '6m':'6 months','7m':'7 months','8m':'8 months','9m':'9 months','10m':'10 months',
+    '11m':'11 months','12m':'12 months','auto-renew':'auto'
+  };
+  const v = el('#p_duration').value;
+  if(v==='auto-renew'){ expiryHint.textContent = 'Expiry: Auto-renew'; return; }
+  let d = new Date();
+  if(v.endsWith('days')) d.setDate(d.getDate()+parseInt(v));
+  else if(v.endsWith('m')) d.setMonth(d.getMonth()+parseInt(v));
+  expiryHint.textContent = 'Expiry: ' + d.toLocaleString();
+}
+el('#p_duration').addEventListener('change', previewExpiry);
+previewExpiry();
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const name = t.dataset.tab;
+    ['add','stocks','records'].forEach(n=>{
+      el('#tab-'+n).style.display = (n===name)?'block':'none';
+    });
+  };
+});
+
+// load products into select
+(async ()=>{
+  const list = await A.fetchProducts();
+  const sel = el('#p_product');
+  sel.innerHTML = list.map(x=>`<option value="${x.key}">${x.label}</option>`).join('');
+})();
+
+// add stock handler
+el('#btnAdd').onclick = async()=>{
+  try{
+    const payload = {
+      owner: uid,
+      product: el('#p_product').value,
+      type: el('#p_type').value,
+      qty: parseInt(el('#p_qty').value||'1'),
+      email: el('#p_email').value,
+      password: el('#p_password').value,
+      profile: el('#p_profile').value,
+      pin: el('#p_pin').value,
+      duration: el('#p_duration').value
+    };
+    const inserted = await A.addStockBulk(payload);
+    alert(`Added ${inserted||payload.qty} stock(s).`);
+    await refreshStocks();
+  }catch(err){ console.error(err); alert('Add failed: '+err.message); }
+};
+
+// owner stocks table (light listing)
+async function refreshStocks(){
+  // show only this owner’s stocks (no secrets in table)
+  const { data, error } = await sb.from('stocks')
+     .select('id,product_key,account_type,expires_at')
+     .eq('owner_id', uid)
+     .order('created_at',{ascending:false}).limit(200);
+  if(error){ console.error(error); return; }
+  const tb = el('#tblStocks tbody');
+  tb.innerHTML = (data||[]).map(r=>`
+    <tr>
+      <td>${r.id.slice(0,8)}…</td>
+      <td>${r.product_key}</td>
+      <td>${r.account_type}</td>
+      <td>${r.expires_at?new Date(r.expires_at).toLocaleString():'—'}</td>
+      <td><button class="btn" data-id="${r.id}" data-act="del">Remove</button></td>
+    </tr>`).join('');
+}
+el('#btnRefreshStocks').onclick = refreshStocks;
+el('#tblStocks').onclick = async(e)=>{
+  const btn = e.target.closest('button[data-act="del"]');
+  if(!btn) return;
+  if(!confirm('Remove this stock row?')) return;
+  try{ await A.deleteStock(uid, btn.dataset.id); await refreshStocks(); }
+  catch(err){ alert('Delete failed: '+err.message); }
+};
+
+// owner sales
+async function refreshSales(){
+  const rows = await A.listOwnerSales(uid);
+  const tb = el('#tblSales tbody');
+  tb.innerHTML = rows.map(r=>`
+   <tr>
+     <td>${r.id}</td>
+     <td>${r.product_key}</td>
+     <td>${r.account_type}</td>
+     <td>${new Date(r.created_at).toLocaleString()}</td>
+     <td>${r.expires_at?new Date(r.expires_at).toLocaleString():'—'}</td>
+     <td>${r.buyer_link||''}</td>
+     <td>${r.price??''}</td>
+     <td>${(r.admin_id||'').slice(0,8)}</td>
+   </tr>`).join('');
+}
+
+// export CSV
+el('#btnExport').onclick = async()=>{
+  const rows = await A.listOwnerSales(uid);
+  const header = ['id','product_key','account_type','created_at','expires_at','buyer_link','price','admin_id'];
+  const csv = [header.join(',')].concat(
+    rows.map(r=>[r.id,r.product_key,r.account_type,r.created_at,r.expires_at,r.buyer_link||'',r.price||'',r.admin_id||''].join(','))
+  ).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'owner-sales.csv'; a.click();
+};
+
+refreshStocks(); refreshSales();
+</script>
+</body></html>
