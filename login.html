@@ -1,37 +1,69 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Login</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script defer src="config.js"></script>
-  <script defer src="common.js"></script>
-  <script defer src="login.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-<header><h1>Login</h1><nav><a href="index.html">Home</a></nav></header>
-<main>
-  <section class="card">
-    <div id="authed" class="hide">
-      <p>Signed in as <strong id="email"></strong></p>
-      <p>Your role: <strong id="role"></strong></p>
-      <div class="links">
-        <a class="btn" href="owner.html">Owner Panel</a>
-        <a class="btn" href="admin.html">Admin Panel</a>
-      </div>
-      <button class="btn" onclick="logout()">Logout</button>
-    </div>
-    <div id="anon">
-      <p>Enter email to receive a magic link:</p>
-      <form id="loginForm">
-        <input type="email" id="emailInput" placeholder="you@email.com" required/>
-        <button class="btn" type="submit">Send magic link</button>
-      </form>
-      <p class="muted" id="hint"></p>
-    </div>
-  </section>
-</main>
+<body class="container">
+  <h1>Sign in</h1>
+
+  <form id="loginForm">
+    <label>Email</label>
+    <input id="email" type="email" required placeholder="owner/admin email" />
+
+    <label>Password</label>
+    <input id="password" type="password" required placeholder="••••••••" />
+
+    <button id="btnLogin" type="submit">Sign in</button>
+    <p id="msg" class="muted"></p>
+  </form>
+
+  <!-- Supabase config -->
+  <script src="config.js"></script>
+
+  <script>
+    const f = document.getElementById('loginForm');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btnLogin');
+
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true; msg.textContent = 'Signing in…';
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        msg.textContent = error.message;
+        btn.disabled = false;
+        return;
+      }
+
+      // fetch role from profiles
+      const { data: prof, error: perr } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (perr) {
+        msg.textContent = perr.message;
+        btn.disabled = false;
+        return;
+      }
+
+      if (prof?.role === 'owner') {
+        window.location.href = 'owner.html';
+      } else if (prof?.role === 'admin') {
+        window.location.href = 'admin.html';
+      } else {
+        msg.textContent = 'No role set on profile.';
+        btn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
