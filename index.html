@@ -1,73 +1,21 @@
+<!-- index.html -->
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AiaxStock Management — Login</title>
-  <style>
-    :root{--bg1:#ffe5ec;--bg2:#ffc2d1}
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial}
-    .wrap{min-height:100%;display:flex;align-items:flex-start;justify-content:center;
-      background:linear-gradient(180deg,var(--bg1),var(--bg2))}
-    .card{width:clamp(320px,92vw,720px);margin:32px;padding:24px;border-radius:20px;
-      background:#fff8f9;border:1px solid #ffd6e2;box-shadow:0 12px 28px rgba(255,156,181,.35)}
-    h1{margin:0 0 4px 0;font-size:28px;letter-spacing:.3px}
-    .brand{font-size:14px;color:#9a2a5b;margin:0 0 16px 0;font-weight:700}
-    .btn{display:block;width:100%;min-height:64px;border-radius:16px;border:1px solid #ffb3c6;
-      background:linear-gradient(180deg,#ffe6ee,#ffc2d1);color:#8a1049;font-weight:800;font-size:18px;
-      margin:10px 0;cursor:pointer}
-    .btn:active{transform:translateY(1px)}
-    .hidden{display:none!important}
-    input{width:100%;height:52px;border-radius:12px;border:1px solid #e7b5c4;padding:0 14px;font-size:16px}
-    label{font-size:13px;color:#6b2a45}
-  </style>
+  <title>AiaxStock Management • Login</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
 </head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <p class="brand">AiaxStock Management</p>
-      <h1>Login</h1>
-      <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
-
-      <button class="btn" onclick="showOwner()">Login as Owner</button>
-      <div id="ownerForm" class="hidden">
-        <label>Owner UUID</label>
-        <input id="ownerUUID" placeholder="paste owner UUID"/>
-        <button class="btn" onclick="loginOwner()">Login</button>
-      </div>
-
-      <button class="btn" onclick="showAdmin()">Login as Admin</button>
-      <div id="adminForm" class="hidden">
-        <label>Admin UUID</label>
-        <input id="adminUUID" placeholder="paste admin UUID"/>
-        <button class="btn" onclick="loginAdmin()">Login</button>
-      </div>
-    </div>
+<body class="pink-bg">
+  <div class="card">
+    <h1>Login</h1>
+    <p>Choose a role then <b>type the UUID</b> to continue.</p>
+    <button class="btn pink" onclick="loginAs('owner')">Login as Owner</button>
+    <button class="btn pink" onclick="loginAs('admin')">Login as Admin</button>
   </div>
-
-  <script>
-    // Fixed IDs (galing sa'yo)
-    const IDS = {
-      owner:  '8cd15b4b-0755-4843-a8d5-2652fa408fe5',
-      admin1: '4e63c32b-cc75-48de-b111-e8a977d868a2',
-      admin2: '20851a7b-ef92-41a1-80d1-d2a6081396d5',
-    };
-    function setSession(role, uid){ localStorage.setItem('role', role); localStorage.setItem('user_id', uid); }
-    function showOwner(){ ownerForm.classList.remove('hidden'); adminForm.classList.add('hidden'); ownerUUID.focus(); }
-    function showAdmin(){ adminForm.classList.remove('hidden'); ownerForm.classList.add('hidden'); adminUUID.focus(); }
-    function loginOwner(){
-      const val = (ownerUUID.value||'').trim();
-      if(!val) return alert('Please paste the Owner UUID.');
-      if(val !== IDS.owner) return alert('Wrong Owner UUID.');
-      setSession('owner', val); location.href = './owner.html';
-    }
-    function loginAdmin(){
-      const val = (adminUUID.value||'').trim();
-      if(!val) return alert('Please paste an Admin UUID.');
-      if(val !== IDS.admin1 && val !== IDS.admin2) return alert('Wrong Admin UUID.');
-      setSession('admin', val); location.href = './admin.html';
-    }
-  </script>
 </body>
 </html>
