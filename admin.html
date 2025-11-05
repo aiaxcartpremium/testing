@@ -1,104 +1,138 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Admin • AiaxStock</title>
-  <link rel="stylesheet" href="./style.css"/>
-  <script type="module">
-    import { getRole, getUID, logout, fetchAvailableSummary, rpcGetAccount, listMySales, fmt, toast } from "./app.js";
-    import { DURATION_MAP } from "./config.js";
-
-    if(getRole()!=="admin"){ location.href="./index.html"; }
-
-    async function refreshAvailable(){
-      const rows = await fetchAvailableSummary();
-      avail.innerHTML = rows.map(r=>`<div class="badge">${r.product_key} • ${r.account_type} • ${r.qty}</div>`).join(" ");
-      prod.innerHTML = rows.map(r=>`<option value="${r.product_key}|${r.account_type}">${r.product_key} — ${r.account_type} (${r.qty})</option>`).join("");
-    }
-
-    async function refreshMySales(){
-      const rows = await listMySales(getUID());
-      myBody.innerHTML = rows.map(r=>`
-        <tr><td>${r.id}</td><td>${r.product_key}</td><td>${r.account_type}</td>
-            <td>${fmt(r.created_at)}</td><td>${fmt(r.expires_at)}</td>
-            <td>${r.buyer_link||""}</td><td>${r.price||""}</td></tr>`).join("");
-    }
-
-    async function doGetAccount(){
-      if(!prod.value) return alert("Pick a product");
-      const [product_key, account_type] = prod.value.split("|");
-      const duration_days = Number(DURATION_MAP[duration.value]||0);
-      const payload = {
-        p_admin: getUID(),
-        p_product_key: product_key,
-        p_account_type: account_type,
-        p_duration_days: duration_days,
-        p_price: Number(price.value||0),
-        p_buyer_link: buyer.value||null
-      };
-      const row = await rpcGetAccount(payload);
-      if(!row){ toast("No stock available"); return; }
-      creds.value = `Email: ${row.email||""}\nPass: ${row.password||""}\nProfile: ${row.profile_name||""}\nPIN: ${row.pin||""}\nExpires: ${fmt(row.expires_at)}`;
-      await refreshMySales();
-      await refreshAvailable();
-    }
-
-    window.refreshAvailable = refreshAvailable;
-    window.refreshMySales = refreshMySales;
-    window.doGetAccount = doGetAccount;
-    window.logout = logout;
-
-    window.onload = async ()=>{ await refreshAvailable(); await refreshMySales(); };
-  </script>
+<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin • AiaxStock</title>
+<link rel="preconnect" href="https://esm.sh">
+<style>
+  :root{ --pink2:#FFB3C6; --pink3:#FF8FAB; }
+  body{margin:0;font-family:system-ui,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}
+  .brand{font-weight:900;font-size:20px;color:#7a0033}
+  nav a{margin-right:16px;text-decoration:none;font-weight:700;color:#0066dd}
+  .btn{background:linear-gradient(180deg,var(--pink2),var(--pink3));border:none;color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
+  .card{background:#fff;border-radius:18px;box-shadow:0 12px 28px rgba(0,0,0,.08);padding:18px;margin:16px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  label{font-weight:700;margin-top:8px;display:block}
+  select,input{width:100%;padding:12px;border-radius:10px;border:1px solid #e9d1da;background:#fff}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px}
+</style>
 </head>
 <body>
-  <div class="nav"><div class="nav-inner container">
-    <div class="brand">AiaxStock — Admin</div>
-    <div class="toolbar">
-      <!-- Admin deliberately cannot jump to Owner -->
-      <button class="btn secondary" onclick="logout()">Logout</button>
+<header>
+  <div class="brand">AiaxStock Management — <b>Admin</b></div>
+  <nav>
+    <a href="owner.html">Go to Owner</a>
+    <button class="btn" onclick="__APP__.logout()">Logout</button>
+  </nav>
+</header>
+
+<section class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h2>Available Stocks (no details)</h2>
+    <button class="btn" id="btnRefresh">Refresh</button>
+  </div>
+  <table id="tblSum"><thead><tr><th>Product</th><th>Type</th><th>Quantity</th></tr></thead><tbody></tbody></table>
+</section>
+
+<section class="card">
+  <h2>Get Account</h2>
+  <div class="row3">
+    <div>
+      <label>Product</label>
+      <select id="a_product"></select>
     </div>
-  </div></div>
-
-  <div class="container">
-    <section class="card">
-      <div class="toolbar"><h2>Available Stocks</h2><button class="btn small" onclick="refreshAvailable()">Refresh</button></div>
-      <div id="avail" class="grid"></div>
-    </section>
-
-    <section class="card">
-      <h2>Get Account</h2>
-      <div class="grid two">
-        <div>
-          <label>Product (only those with stock)</label>
-          <select id="prod"></select>
-        </div>
-        <div>
-          <label>Duration</label>
-          <select id="duration">
-            <option value="7d">7 days</option><option value="14d">14 days</option>
-            <option value="1m">1 month</option><option value="2m">2 months</option>
-            <option value="3m">3 months</option><option value="6m">6 months</option>
-            <option value="12m">12 months</option>
-          </select>
-        </div>
-        <div><label>Buyer social link</label><input id="buyer" placeholder="@username or link"/></div>
-        <div><label>Price</label><input id="price" type="number" placeholder="e.g. 149.00"/></div>
-      </div>
-      <div class="toolbar"><button class="btn" onclick="doGetAccount()">Get Account</button></div>
-      <textarea id="creds" rows="4" style="width:100%" placeholder="Credentials will appear here..." readonly></textarea>
-    </section>
-
-    <section class="card">
-      <div class="toolbar"><h2>My Buyers Record</h2><button class="btn small" onclick="refreshMySales()">Refresh</button></div>
-      <table class="table">
-        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th></tr></thead>
-        <tbody id="myBody"></tbody>
-      </table>
-    </section>
+    <div>
+      <label>Account type</label>
+      <select id="a_type">
+        <option>shared profile</option>
+        <option>solo profile</option>
+        <option>shared account</option>
+        <option>solo account</option>
+        <option>invitation</option>
+        <option>head</option>
+        <option>edu</option>
+      </select>
+    </div>
+    <div>
+      <label>Duration</label>
+      <select id="a_duration">
+        <option value="7days">7 days</option>
+        <option value="14days">14 days</option>
+        <option value="1m">1 month</option>
+        <option value="2m">2 months</option>
+        <option value="3m">3 months</option>
+        <option value="auto-renew">auto-renew</option>
+      </select>
+    </div>
+  </div>
+  <div style="margin-top:12px">
+    <button class="btn" id="btnGet">Get Account</button>
   </div>
 
-  <div id="toast" class="toast"></div>
-</body>
-</html>
+  <div id="credBox" style="margin-top:12px;display:none" class="card">
+    <div><b>Login:</b> <span id="cEmail"></span></div>
+    <div><b>Password:</b> <span id="cPass"></span></div>
+    <div><b>Profile:</b> <span id="cProf"></span></div>
+    <div><b>PIN:</b> <span id="cPin"></span></div>
+    <div><b>Expires:</b> <span id="cExp"></span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>My Buyers Record</h2>
+  <table id="tblSales"><thead>
+    <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th></tr>
+  </thead><tbody></tbody></table>
+</section>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+<script>
+const A = window.__APP__;
+const ctx = A.assertRole(['admin','owner']); if(!ctx) throw 0;  // owner can view admin panel if you want to allow; set ['admin'] to restrict
+const uid = ctx.uid;
+const el = s=>document.querySelector(s);
+
+async function loadSummaryAndDropdown(){
+  const sum = await A.fetchStockSummary();
+  const tb = el('#tblSum tbody');
+  tb.innerHTML = sum.map(r=>`<tr><td>${r.product_key}</td><td>${r.account_type}</td><td>${r.qty}</td></tr>`).join('');
+
+  // fill product dropdown with in-stock only
+  const distinct = [...new Set(sum.filter(x=>x.qty>0).map(x=>x.product_key))];
+  el('#a_product').innerHTML = distinct.map(k=>`<option>${k}</option>`).join('');
+}
+
+el('#btnRefresh').onclick = loadSummaryAndDropdown;
+
+el('#btnGet').onclick = async()=>{
+  try{
+    const product = el('#a_product').value;
+    const type = el('#a_type').value;
+    const duration = el('#a_duration').value;
+    const row = await A.getAccount({admin: uid, product, type, duration});
+    if(!row){ alert('No available stock for this selection.'); return; }
+    el('#cEmail').textContent = row.email || '';
+    el('#cPass').textContent  = row.password || '';
+    el('#cProf').textContent  = row.profile_name || '';
+    el('#cPin').textContent   = row.pin || '';
+    el('#cExp').textContent   = row.expires_at ? new Date(row.expires_at).toLocaleString() : '—';
+    el('#credBox').style.display = 'block';
+    await refreshMySales();
+    await loadSummaryAndDropdown(); // stock decremented
+  }catch(err){ console.error(err); alert('Get failed: '+err.message); }
+};
+
+async function refreshMySales(){
+  const rows = await A.listMySales(uid);
+  el('#tblSales tbody').innerHTML = rows.map(r=>`
+    <tr><td>${r.id}</td><td>${r.product_key}</td><td>${r.account_type}</td>
+    <td>${new Date(r.created_at).toLocaleString()}</td>
+    <td>${r.expires_at?new Date(r.expires_at).toLocaleString():'—'}</td>
+    <td>${r.buyer_link||''}</td><td>${r.price??''}</td></tr>`).join('');
+}
+
+loadSummaryAndDropdown();
+refreshMySales();
+</script>
+</body></html>
