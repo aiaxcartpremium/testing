@@ -78,36 +78,45 @@ function fillStaticSelectsOwner(){
 
 async function ownerAddStockSubmit(e){
   e.preventDefault();
-  const product_key  = qs('#productSelect')?.value;
-  const account_type = qs('#typeSelect')?.value;
-  const duration_code= qs('#durationSelect')?.value;
-  const quantity     = parseInt(qs('#qtyInput')?.value||'1',10);
 
-  const email        = qs('#emailInput')?.value.trim() || null;
-  const password     = qs('#passInput')?.value.trim() || null;
-  const profile_name = qs('#profileInput')?.value.trim() || null;
-  const pin          = qs('#pinInput')?.value.trim() || null;
-  const notes        = qs('#notesInput')?.value.trim() || null;
+  const product_key   = qs('#productSelect')?.value;
+  const account_type  = qs('#typeSelect')?.value;
+  const duration_code = qs('#durationSelect')?.value;   // UI value like '7d','1m','auto'
+  const quantity      = parseInt(qs('#qtyInput')?.value || '1', 10);
 
-  if(!product_key)  return alert('Please select a product');
-  if(!account_type) return alert('Please select account type');
+  const email         = qs('#emailInput')?.value.trim() || null;
+  const password      = qs('#passInput')?.value.trim() || null;
+  const profile_name  = qs('#profileInput')?.value.trim() || null;
+  const pin           = qs('#pinInput')?.value.trim() || null;
+  const notes         = qs('#notesInput')?.value.trim() || null;
+
+  if(!product_key)   return alert('Please select a product');
+  if(!account_type)  return alert('Please select account type');
   if(!duration_code) return alert('Please select duration');
-  if(quantity<1)    return alert('Quantity must be at least 1');
+  if(quantity < 1)   return alert('Quantity must be at least 1');
 
-  try{
-    const payload = { product_key, account_type, duration_code, quantity, email, password, profile_name, pin, notes };
-    const { error } = await supabase.from('stocks').insert([payload]);
-    if(error) throw error;
+  // IMPORTANT: your table uses duration_choice and (likely) owner_id
+  const payload = {
+    product_key,
+    account_type,
+    duration_choice: duration_code,   // <-- map UI to DB column name
+    quantity,
+    email, password, profile_name, pin, notes,
+    owner_id: currentUUID()           // <-- make sure owner_id is set
+  };
 
-    alert('Stock added');
-    e.target.reset();
-    fillStaticSelectsOwner();
-    await fillProductsSelect(qs('#productSelect'));
-    ownerRenderStocks();
-  }catch(err){
-    console.error(err);
-    alert('Add stock failed');
+  const { error } = await supabase.from('stocks').insert([payload]);
+
+  if (error) {
+    console.error('add stock error:', error);
+    return alert('Add stock failed: ' + (error.message || ''));
   }
+
+  alert('Stock added');
+  e.target.reset();
+  fillStaticSelectsOwner();
+  await fillProductsSelect(qs('#productSelect'));
+  ownerRenderStocks(); // refresh table
 }
 
 async function fetchStocksSummaryOwner(){
