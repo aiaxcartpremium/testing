@@ -2,40 +2,30 @@
    AiaxStock Management • app.js
    ========================= */
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ---- Supabase client (config.js must define SUPABASE_URL & SUPABASE_ANON_KEY)
+const supabase = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- tiny DOM helpers ---------- */
+// ---- tiny DOM helpers
 const qs  = (sel, root=document) => root.querySelector(sel);
 const qsa = (sel, root=document) => [...root.querySelectorAll(sel)];
 const on  = (el, ev, fn, opts) => el && el.addEventListener(ev, fn, opts);
 
-/* ---------- storage for pseudo-login ---------- */
+// ---- pseudo-login in localStorage
 const SESSION_KEY = 'aiax.session'; // {role:'owner'|'admin', uuid:'...'}
-function saveSession(s){ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
-function getSession(){ try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch{ return null; } }
-function clearSession(){ localStorage.removeItem(SESSION_KEY); }
+const saveSession   = s => localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+const getSession    = () => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)||'null'); } catch { return null; } };
+const clearSession  = () => localStorage.removeItem(SESSION_KEY);
 
-/* ---------- expose for index.html ---------- */
-function loginWithUid(role, uuid){
-  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if(!UUID_RE.test(uuid)) return alert('Invalid UUID');
-  if(role!=='owner' && role!=='admin') return alert('Invalid role');
-  saveSession({ role, uuid });
-  location.href = role==='owner' ? 'owner.html' : 'admin.html';
-}
-window.__APP__ = Object.assign(window.__APP__||{}, { loginWithUid });
-
-/* ---------- auth helpers ---------- */
 async function requireRole(roles){
   const s = getSession();
   if(!s || !roles.includes(s.role)){ location.href = 'index.html'; throw new Error('not authorized'); }
   return s;
 }
-function currentUUID(){ const s = getSession(); return s?.uuid || null; }
+const currentUUID = () => getSession()?.uuid || null;
 
-/* ---------- formatting helpers ---------- */
-function fmtDT(d){ if(!d) return ''; return new Date(d).toLocaleString(); }
-function csvEscape(v){ if(v==null) return ''; const s=String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
+// ---- misc helpers
+const fmtDT = d => d ? new Date(d).toLocaleString() : '';
+const csvEscape = v => v==null ? '' : ( /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v) );
 function toCSV(rows){
   if(!rows?.length) return '';
   const cols = Object.keys(rows[0]);
@@ -44,10 +34,9 @@ function toCSV(rows){
   return [head, ...lines].join('\n');
 }
 
-/* ---------- durations + account types ---------- */
+// ---- durations & account types
 const ACCOUNT_TYPES = [
-  'shared profile','solo profile','shared account','solo account',
-  'invitation','head','edu'
+  'shared profile','solo profile','shared account','solo account','invitation','head','edu'
 ];
 const DURATIONS = [
   ['7 days','7d'],['14 days','14d'],
@@ -57,19 +46,22 @@ const DURATIONS = [
   ['auto-renew','auto']
 ];
 
-/* ---------- PRODUCTS ---------- */
+// ---- products
 async function fetchProducts(){
-  const { data, error } = await supabase.from('products').select('key,label').order('label');
-  if(error){ console.error('products error', error); return []; }
-  return data || [];
+  try{
+    const { data, error } = await supabase.from('products').select('key,label').order('label');
+    if(error) throw error;
+    return data || [];
+  }catch(e){ console.error('products error', e); return []; }
 }
 async function fillProductsSelect(selectEl){
+  if(!selectEl) return;
   const rows = await fetchProducts();
   selectEl.innerHTML = `<option value="" disabled selected>Select product</option>` +
     rows.map(r=>`<option value="${r.key}">${r.label}</option>`).join('');
 }
 
-/* ---------- OWNER: Add Stock ---------- */
+// ================= OWNER =================
 function fillStaticSelectsOwner(){
   const typeSel = qs('#typeSelect');
   const durSel  = qs('#durationSelect');
@@ -80,6 +72,7 @@ function fillStaticSelectsOwner(){
     durSel.innerHTML = DURATIONS.map(([l,v])=>`<option value="${v}">${l}</option>`).join('');
   }
 }
+
 async function ownerAddStockSubmit(e){
   e.preventDefault();
   const product_key  = qs('#productSelect')?.value;
@@ -93,48 +86,58 @@ async function ownerAddStockSubmit(e){
   const pin          = qs('#pinInput')?.value.trim() || null;
   const notes        = qs('#notesInput')?.value.trim() || null;
 
-  if(!product_key) return alert('Please select a product');
+  if(!product_key)  return alert('Please select a product');
   if(!account_type) return alert('Please select account type');
   if(!duration_code) return alert('Please select duration');
-  if(quantity<1) return alert('Quantity must be at least 1');
+  if(quantity<1)    return alert('Quantity must be at least 1');
 
-  const payload = { product_key, account_type, duration_code, quantity, email, password, profile_name, pin, notes };
-  const { error } = await supabase.from('stocks').insert([payload]);
-  if(error){ console.error(error); return alert('Add stock failed'); }
+  try{
+    const payload = { product_key, account_type, duration_code, quantity, email, password, profile_name, pin, notes };
+    const { error } = await supabase.from('stocks').insert([payload]);
+    if(error) throw error;
 
-  alert('Stock added');
-  e.target.reset();
-  fillStaticSelectsOwner();
-  await fillProductsSelect(qs('#productSelect'));
-  ownerRenderStocks();
-}
-
-/* ---------- OWNER: Stocks summary (with remove one) ---------- */
-async function fetchStocksSummaryOwner(){
-  let rows=[], error=null;
-  ({ data: rows, error } = await supabase.from('stocks_summary')
-    .select('product_key,account_type,duration_code,total_qty').order('product_key'));
-
-  if(error){
-    const res = await supabase.from('stocks').select('product_key,account_type,duration_code,quantity');
-    if(res.error){ console.error(res.error); return []; }
-    const map = new Map();
-    for(const r of res.data){
-      const k = `${r.product_key}|${r.account_type}|${r.duration_code}`;
-      map.set(k, (map.get(k)||0) + (r.quantity||0));
-    }
-    rows = [...map.entries()].map(([k,qty])=>{
-      const [product_key,account_type,duration_code] = k.split('|');
-      return { product_key, account_type, duration_code, total_qty: qty };
-    });
+    alert('Stock added');
+    e.target.reset();
+    fillStaticSelectsOwner();
+    await fillProductsSelect(qs('#productSelect'));
+    ownerRenderStocks();
+  }catch(err){
+    console.error(err);
+    alert('Add stock failed');
   }
-  return rows;
 }
+
+async function fetchStocksSummaryOwner(){
+  try{
+    let rows=[];
+    let res = await supabase.from('stocks_summary')
+      .select('product_key,account_type,duration_code,total_qty').order('product_key');
+    if(res.error) throw res.error;
+    rows = res.data || [];
+    return rows;
+  }catch(err){
+    // fallback: group client-side
+    try{
+      const res = await supabase.from('stocks').select('product_key,account_type,duration_code,quantity');
+      if(res.error) throw res.error;
+      const map = new Map();
+      for(const r of res.data){
+        const k = `${r.product_key}|${r.account_type}|${r.duration_code}`;
+        map.set(k, (map.get(k)||0) + (r.quantity||0));
+      }
+      return [...map.entries()].map(([k,qty])=>{
+        const [product_key,account_type,duration_code] = k.split('|');
+        return { product_key, account_type, duration_code, total_qty: qty };
+      });
+    }catch(e){ console.error(e); return []; }
+  }
+}
+
 async function ownerRenderStocks(){
   const wrap = qs('#ownerStocksTable');
   if(!wrap) return;
 
-  wrap.innerHTML = 'Loading…';
+  wrap.textContent = 'Loading…';
   const rows = await fetchStocksSummaryOwner();
   if(!rows.length){ wrap.innerHTML = '<div class="muted">No stocks yet.</div>'; return; }
 
@@ -160,47 +163,52 @@ async function ownerRenderStocks(){
     </table>
   `;
 
-  qsa('button[data-rem]').forEach(btn=>{
+  qsa('button[data-rem]', wrap).forEach(btn=>{
     on(btn,'click', async ()=>{
       const row = JSON.parse(decodeURIComponent(btn.dataset.rem));
       if(!confirm(`Remove 1 from ${row.product_key} • ${row.account_type} • ${row.duration_code}?`)) return;
-      const { error } = await supabase.rpc('remove_one_stock', {
-        p_product: row.product_key, p_type: row.account_type, p_duration: row.duration_code
+      // Prefer server rpc remove_one_stock
+      let { error } = await supabase.rpc('remove_one_stock', {
+        p_product: row.product_key,
+        p_type: row.account_type,
+        p_duration: row.duration_code
       });
       if(error){
-        const { error: delErr } = await supabase
-          .from('stocks')
+        // fallback delete one matching row (subject to RLS)
+        const res = await supabase.from('stocks')
           .delete()
           .eq('product_key', row.product_key)
           .eq('account_type', row.account_type)
           .eq('duration_code', row.duration_code)
           .gt('quantity', 0)
           .limit(1);
-        if(delErr){ console.error(delErr); return alert('Remove failed'); }
+        if(res.error){ console.error(res.error); return alert('Remove failed'); }
       }
-      await ownerRenderStocks();
+      ownerRenderStocks();
     });
   });
 }
 
-/* ---------- OWNER: Records (editable + Add days + CSV) ---------- */
 async function ownerFetchRecords(){
-  let rows=[], error=null;
-  ({ data: rows, error } = await supabase.rpc('list_my_sales', { p_owner: currentUUID() }));
-  if(error){
-    const res = await supabase.from('sales')
+  // try RPC first
+  try{
+    const { data, error } = await supabase.rpc('list_my_sales', { p_owner: currentUUID() });
+    if(error) throw error;
+    return data||[];
+  }catch{
+    const res = await supabase
+      .from('sales')
       .select('id,product_key,account_type,created_at,expires_at,buyer_link,price')
       .order('id',{ascending:false}).limit(500);
-    if(res.error){ console.error(res.error); return []; }
-    rows = res.data;
+    return res.data || [];
   }
-  return rows;
 }
+
 async function ownerRenderRecords(){
   const wrap = qs('#ownerRecords');
   if(!wrap) return;
 
-  wrap.innerHTML = 'Loading…';
+  wrap.textContent = 'Loading…';
   const rows = await ownerFetchRecords();
   const products = await fetchProducts();
   const labelOf = (key)=> products.find(p=>p.key===key)?.label || key;
@@ -208,7 +216,7 @@ async function ownerRenderRecords(){
   if(!rows.length){ wrap.innerHTML = '<div class="muted">No records yet.</div>'; return; }
 
   wrap.innerHTML = `
-    <div class="row between">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="muted">Total: ${rows.length}</div>
       <button id="btnExportCSV" class="btn-outline">Export CSV</button>
     </div>
@@ -234,33 +242,31 @@ async function ownerRenderRecords(){
     </table>
   `;
 
-  on(qs('#btnExportCSV'),'click', async ()=>{
+  on(qs('#btnExportCSV'),'click', ()=>{
     const csv = toCSV(rows);
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url  = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'owner_records.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = 'owner_records.csv';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   });
 
   qsa('button.saveRow', wrap).forEach(btn=>{
     on(btn,'click', async ()=>{
       const tr = btn.closest('tr');
       const id = Number(tr.dataset.id);
-      const exp = qs('.expInput', tr).value ? new Date(qs('.expInput', tr).value).toISOString() : null;
+      const expVal = qs('.expInput', tr).value;
       const buyer = qs('.buyerInput', tr).value || null;
       const price = qs('.priceInput', tr).value ? Number(qs('.priceInput', tr).value) : null;
       const addDays = Number(qs('.addDaysInput', tr).value||'0');
 
-      let expires_at = exp;
+      let expires_at = expVal ? new Date(expVal) : null;
       if(addDays>0){
-        const base = exp ? new Date(exp) : new Date();
+        const base = expires_at ? new Date(expires_at) : new Date();
         base.setDate(base.getDate()+addDays);
-        expires_at = base.toISOString();
+        expires_at = base;
       }
-
-      const { error } = await supabase.from('sales').update({ buyer_link: buyer, price, expires_at }).eq('id', id);
+      const payload = { buyer_link: buyer, price, expires_at: expires_at ? expires_at.toISOString() : null };
+      const { error } = await supabase.from('sales').update(payload).eq('id', id);
       if(error){ console.error(error); return alert('Save failed'); }
       alert('Saved');
       ownerRenderRecords();
@@ -268,30 +274,35 @@ async function ownerRenderRecords(){
   });
 }
 
-/* ---------- ADMIN: Available Stocks + Refresh ---------- */
+// ================= ADMIN =================
 async function adminFetchAvailable(){
-  let rows=[], error=null;
-  ({data: rows, error} = await supabase.from('stocks_available_for_admin')
-    .select('product_key,account_type,duration_code,total_qty').order('product_key'));
-  if(error){
-    ({data: rows, error} = await supabase.from('stocks_summary')
-      .select('product_key,account_type,duration_code,total_qty').order('product_key'));
-    if(error){ console.warn('No admin-safe view; falling back may fail with RLS.', error); rows = []; }
+  try{
+    let { data, error } = await supabase.from('stocks_available_for_admin')
+      .select('product_key,account_type,duration_code,total_qty').order('product_key');
+    if(error) throw error;
+    return data||[];
+  }catch{
+    try{
+      let { data, error } = await supabase.from('stocks_summary')
+        .select('product_key,account_type,duration_code,total_qty').order('product_key');
+      if(error) throw error;
+      return data||[];
+    }catch(e){ console.warn('admin available fetch failed', e); return []; }
   }
-  return rows;
 }
+
 async function adminRenderAvailable(){
   const box = qs('#adminAvailable');
   if(!box) return;
 
-  box.innerHTML = 'Fetching…';
+  box.textContent = 'Fetching…';
   const rows = await adminFetchAvailable();
   const products = await fetchProducts();
   const labelOf = (key)=> products.find(p=>p.key===key)?.label || key;
 
   box.innerHTML = `
-    <div class="row between">
-      <h3>Available Stocks</h3>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">Available Stocks</h3>
       <button id="btnAdminRefresh" class="btn-outline">Refresh</button>
     </div>
     <table class="table">
@@ -305,13 +316,7 @@ async function adminRenderAvailable(){
   `;
   on(qs('#btnAdminRefresh'), 'click', adminRefreshAll);
 }
-async function adminRefreshAll(){
-  await adminRenderAvailable();
-  await adminFillFormOptions();
-  await adminRenderMySales();
-}
 
-/* ---------- ADMIN: Get Account (filtered by in-stock) ---------- */
 async function adminFillFormOptions(){
   const productSel = qs('#adminProductSelect');
   const typeSel    = qs('#adminTypeSelect');
@@ -319,25 +324,28 @@ async function adminFillFormOptions(){
   if(!productSel || !typeSel || !durSel) return;
 
   const available = await adminFetchAvailable();
-
   const uniqProd = [...new Set(available.map(r=>r.product_key))];
   const products = await fetchProducts();
   const labelOf  = (key)=> products.find(p=>p.key===key)?.label || key;
+
   productSel.innerHTML = `<option value="" disabled selected>Select product</option>` +
     uniqProd.map(k=>`<option value="${k}">${labelOf(k)}</option>`).join('');
 
-  // when product changes, types and durations shrink to what's available
+  // shrink other selects based on chosen product
   on(productSel,'change', ()=>{
     const p = productSel.value;
     const sub = available.filter(r=>r.product_key===p);
 
     const types = [...new Set(sub.map(r=>r.account_type))];
-    typeSel.innerHTML = types.map(t=>`<option value="${t}">${t}</option>`).join('');
+    typeSel.innerHTML = `<option value="" disabled selected>Select type</option>` +
+      types.map(t=>`<option value="${t}">${t}</option>`).join('');
 
     const durs = [...new Set(sub.map(r=>r.duration_code))];
-    durSel.innerHTML = durs.map(d=>`<option value="${d}">${d}</option>`).join('');
+    durSel.innerHTML = `<option value="" disabled selected>Select duration</option>` +
+      durs.map(d=>`<option value="${d}">${d}</option>`).join('');
   }, { once:true });
 }
+
 async function adminGetAccount(){
   const product_key  = qs('#adminProductSelect')?.value;
   const account_type = qs('#adminTypeSelect')?.value;
@@ -351,6 +359,7 @@ async function adminGetAccount(){
     p_duration: duration_code
   });
   if(error){ console.error(error); return alert('get_account failed'); }
+
   const r = (data&&data[0]) || null;
   const out = qs('#adminCreds');
   if(out){
@@ -366,10 +375,9 @@ async function adminGetAccount(){
       `;
     }
   }
-  await adminRefreshAll(); // reflect decrement
+  adminRefreshAll(); // reflect stock decrement
 }
 
-/* ---------- ADMIN: My Buyers Record ---------- */
 async function adminRenderMySales(){
   const wrap = qs('#adminMySales');
   if(!wrap) return;
@@ -400,24 +408,61 @@ async function adminRenderMySales(){
   `;
 }
 
-/* ---------- Owner page boot ---------- */
+async function adminRefreshAll(){
+  await adminRenderAvailable();
+  await adminFillFormOptions();
+  await adminRenderMySales();
+}
+
+// ================= LOGIN PAGE (no inline JS) =================
+function bootLogin(){
+  // show/hide forms
+  on(qs('#btnOwner'), 'click', ()=>{
+    qs('#formOwner').style.display='block';
+    qs('#formAdmin').style.display='none';
+    qs('#ownerUUID').focus();
+  });
+  on(qs('#btnAdmin'), 'click', ()=>{
+    qs('#formAdmin').style.display='block';
+    qs('#formOwner').style.display='none';
+    qs('#adminUUID').focus();
+  });
+
+  // submit handlers
+  on(qs('#formOwner'),'submit', (e)=>{
+    e.preventDefault();
+    const uuid = qs('#ownerUUID').value.trim();
+    if(!uuid) return alert('Enter owner UUID');
+    window.__APP__.loginWithUid('owner', uuid);
+  });
+  on(qs('#formAdmin'),'submit', (e)=>{
+    e.preventDefault();
+    const uuid = qs('#adminUUID').value.trim();
+    if(!uuid) return alert('Enter admin UUID');
+    window.__APP__.loginWithUid('admin', uuid);
+  });
+}
+
+// ================= OWNER/ADMIN PAGE BOOTS =================
 async function bootOwner(){
-  await requireRole(['owner']); // change to ['owner','admin'] if you want admin to view too
+  await requireRole(['owner']);           // only owner
   on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
-  on(qs('#goAdmin'), 'click', ()=>{ location.href='admin.html'; });
+  on(qs('#goAdmin'),  'click', ()=>{ location.href='admin.html'; });
 
   fillStaticSelectsOwner();
   await fillProductsSelect(qs('#productSelect'));
   on(qs('#addStockForm'), 'submit', ownerAddStockSubmit);
 
-  on(qs('#tabAdd'),    'click', ()=>showOwnerTab('add'));
-  on(qs('#tabStocks'), 'click', ()=>showOwnerTab('stocks'));
-  on(qs('#tabRecords'),'click', ()=>showOwnerTab('records'));
+  // tabs
+  on(qs('#tabAdd'),     'click', ()=>showOwnerTab('add'));
+  on(qs('#tabStocks'),  'click', ()=>showOwnerTab('stocks'));
+  on(qs('#tabRecords'), 'click', ()=>showOwnerTab('records'));
 
   showOwnerTab('add');
   ownerRenderStocks();
   ownerRenderRecords();
 }
+
 function showOwnerTab(which){
   const panes = { add: qs('#paneAdd'), stocks: qs('#paneStocks'), records: qs('#paneRecords') };
   Object.values(panes).forEach(p=>p && (p.style.display='none'));
@@ -428,24 +473,28 @@ function showOwnerTab(which){
   qs(map[which])?.classList.add('active');
 }
 
-/* ---------- Admin page boot ---------- */
 async function bootAdmin(){
-  await requireRole(['admin']); // strictly admin-only
+  await requireRole(['admin']);           // admin only (owner can have a separate admin uid if needed)
   on(qs('#btnLogout'), 'click', ()=>{ clearSession(); location.href='index.html'; });
   on(qs('#goOwner'),  'click', ()=>{ location.href='owner.html'; });
 
-  await adminRenderAvailable();
-  await adminFillFormOptions();
-  await adminRenderMySales();
-
+  await adminRefreshAll();
   on(qs('#btnGetAccount'),'click', adminGetAccount);
 }
 
-/* ---------- Router (detect by existing elements) ---------- */
-(function(){
-  // If the page has owner form elements, we're on owner.html
-  if (qs('#addStockForm') || qs('#ownerPage')) return void bootOwner();
-  // If it has admin widgets, we're on admin.html
-  if (qs('#adminProductSelect') || qs('#adminPage')) return void bootAdmin();
-  // index.html uses inline script for toggles; nothing to boot here
-})();
+// ================= PUBLIC API for index.html =================
+window.__APP__ = {
+  loginWithUid(role, uuid){
+    if(!uuid) return alert('UUID required');
+    if(role!=='owner' && role!=='admin') return alert('Invalid role');
+    saveSession({ role, uuid });
+    location.href = role === 'owner' ? 'owner.html' : 'admin.html';
+  }
+};
+
+// ================= Router (runs once DOM is ready) =================
+document.addEventListener('DOMContentLoaded', ()=>{
+  if(qs('#loginPage'))  return bootLogin();
+  if(qs('#ownerPage'))  return bootOwner();
+  if(qs('#adminPage'))  return bootAdmin();
+});
