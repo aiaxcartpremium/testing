@@ -1,29 +1,29 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Login • AiaxStock</title>
-  <link rel="preconnect" href="https://esm.sh">
-  <style>
-    :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
-    .wrap{max-width:960px;margin:56px auto;padding:24px}
-    h1{margin:0 0 10px;font-size:48px}
-    p{font-size:18px;color:#222;margin:0 0 20px}
-    .tiles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .tile{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px}
-    .btn{width:100%;padding:18px 20px;font-weight:800;font-size:20px;border-radius:14px;
-         background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff;border:none;cursor:pointer}
-    .btn:active{transform:translateY(1px)}
-    .form{margin-top:14px;padding:14px;border:1px solid #ffd1df;border-radius:12px;background:#fff;display:none}
-    label{font-weight:700;font-size:14px}
-    input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px;margin-top:6px}
-    .row{display:flex;gap:10px;margin-top:12px}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login • AiaxStock</title>
+<style>
+  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35);}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+  .wrap{max-width:960px;margin:56px auto;padding:24px}
+  h1{margin:0 0 10px;font-size:48px}
+  p{font-size:18px;color:#222;margin:0 0 20px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .tile{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px}
+  .btn{width:100%;padding:18px 20px;font-weight:800;font-size:20px;border-radius:14px;
+       background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff;border:none;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .form{margin-top:14px;padding:14px;border:1px solid #ffd1df;border-radius:12px;background:#fff;display:none}
+  label{font-weight:700;font-size:14px}
+  input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px;margin-top:6px}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .ghost{padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #ffd1df;font-weight:700;cursor:pointer}
+</style>
 </head>
-<body id="loginPage">
+<body>
   <div class="wrap">
     <h1>Login</h1>
     <p>Choose a role then type the <strong>UUID</strong> to continue (no magic link).</p>
@@ -34,9 +34,10 @@
         <button class="btn" id="btnOwner">Login as Owner</button>
         <form class="form" id="formOwner" autocomplete="off">
           <label for="ownerUUID">Owner UUID</label>
-          <input id="ownerUUID" placeholder="paste owner UUID"/>
+          <input id="ownerUUID" placeholder="type owner UUID…" autocomplete="off" inputmode="text">
           <div class="row">
-            <button class="btn" type="submit" style="flex:1" id="btnOwnerLogin">Continue</button>
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+            <button class="ghost" type="button" id="fillOwner">Use default</button>
           </div>
         </form>
       </div>
@@ -46,18 +47,50 @@
         <button class="btn" id="btnAdmin">Login as Admin</button>
         <form class="form" id="formAdmin" autocomplete="off">
           <label for="adminUUID">Admin UUID</label>
-          <input id="adminUUID" placeholder="paste admin UUID"/>
+          <input id="adminUUID" placeholder="type admin UUID…" autocomplete="off" inputmode="text">
           <div class="row">
-            <button class="btn" type="submit" style="flex:1" id="btnAdminLogin">Continue</button>
+            <button class="btn" type="submit" style="flex:1">Continue</button>
+            <button class="ghost" type="button" id="fillAdmin1">Use default</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Supabase UMD + config + app -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Only config.js is needed here -->
   <script src="config.js"></script>
-  <script type="module" src="app.js"></script>
+  <script>
+    // Simple local "session"
+    const SESSION_KEY='aiax.session';
+    const saveSession = s => localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+
+    const $=s=>document.querySelector(s);
+    const on=(el,ev,fn)=>el&&el.addEventListener(ev,fn);
+
+    // Show/hide forms
+    on($('#btnOwner'),'click', ()=>{ $('#formOwner').style.display='block'; $('#formAdmin').style.display='none'; $('#ownerUUID').focus(); });
+    on($('#btnAdmin'),'click', ()=>{ $('#formAdmin').style.display='block'; $('#formOwner').style.display='none'; $('#adminUUID').focus(); });
+
+    // Quick-fill (optional)
+    on($('#fillOwner'),'click', ()=>{ $('#ownerUUID').value = (window.ID_OWNER||''); });
+    on($('#fillAdmin1'),'click', ()=>{ $('#adminUUID').value = (window.ID_ADMIN1||window.ID_ADMIN2||''); });
+
+    // Submits
+    on($('#formOwner'),'submit', e=>{
+      e.preventDefault();
+      const uid = $('#ownerUUID').value.trim();
+      if(!uid) return alert('Enter owner UUID');
+      saveSession({role:'owner', uuid:uid});
+      location.href='owner.html';
+    });
+
+    on($('#formAdmin'),'submit', e=>{
+      e.preventDefault();
+      const uid = $('#adminUUID').value.trim();
+      if(!uid) return alert('Enter admin UUID');
+      saveSession({role:'admin', uuid:uid});
+      location.href='admin.html';
+    });
+  </script>
 </body>
 </html>
