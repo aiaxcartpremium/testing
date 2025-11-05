@@ -1,131 +1,31 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AiaxStock Management • Login</title>
-  <style>
-    :root{
-      --pink-1:#FFE5EC; /* Lavender Blush */
-      --pink-2:#FFB3C6; /* Pastel Pink   */
-      --pink-3:#FF8FAB; /* Light Pink    */
-      --pink-4:#FFC2D1; /* Pink Champagne*/
-      --ink:#191919;
-      --ink-soft:#444;
-      --btn-text:#640b2b;
-    }
-    /* Reset */
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:ui-sans-serif, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
-      color:var(--ink);
-      background:
-        radial-gradient(1200px 600px at 50% -150px, rgba(255,179,198,.55), transparent 60%),
-        linear-gradient(180deg, var(--pink-1), #ffe9f0 30%, #ffe0ea 60%, #ffd8e5 100%);
-      /* critical: allow clicks to pass everywhere by default */
-      pointer-events:auto;
-    }
-
-    .wrap{
-      max-width:940px;
-      margin:32px auto;
-      padding:0 16px 48px;
-      position:relative;
-      z-index:0; /* ensure above any pseudo background */
-    }
-
-    h1{
-      font-size:clamp(40px,7vw,64px);
-      line-height:1.05;
-      margin:12px 0 8px;
-      letter-spacing:-.02em;
-    }
-    p.lead{
-      color:var(--ink-soft);
-      font-size:18px;
-      margin:0 0 28px;
-    }
-
-    .card{
-      background:linear-gradient(180deg, #fff, #fff6f9);
-      border:1px solid #ffd0de;
-      border-radius:20px;
-      padding:22px;
-      box-shadow:0 10px 30px rgba(255, 143, 171, .20), 0 2px 0 rgba(255,255,255,.6) inset;
-      backdrop-filter:saturate(110%) blur(4px);
-    }
-
-    .btns{display:flex; gap:18px; flex-wrap:wrap}
-
-    button.btn{
-      -webkit-appearance:none; appearance:none;
-      border:0;
-      cursor:pointer;
-      padding:18px 22px;
-      min-width:220px;
-      font-weight:800;
-      font-size:20px;
-      color:var(--btn-text);
-      background:
-        linear-gradient(180deg, #ffd6e3, #ffb6cb);
-      border-radius:18px;
-      box-shadow:
-        0 10px 22px rgba(255, 143, 171, .35),
-        0 2px 0 #ffe7ef inset;
-      transition:transform .05s ease, box-shadow .15s ease, filter .15s ease;
-      /* make absolutely sure clicks work */
-      pointer-events:auto; position:relative; z-index:1;
-    }
-    button.btn:active{ transform:translateY(1px); filter:brightness(.97) }
-
-    /* Avoid any full-screen pseudo overlay from blocking clicks */
-    .bg, .bg::before, .bg::after{ pointer-events:none !important }
-
-    /* Safe area on small phones */
-    @supports(padding:env(safe-area-inset-top)){
-      .wrap{ padding-left:calc(16px + env(safe-area-inset-left));
-             padding-right:calc(16px + env(safe-area-inset-right)); }
-    }
-  </style>
-  <!-- Load app AFTER styles; defer so DOM exists before binding -->
-  <script type="module" defer>
-    // --- Minimal “router” for login buttons ---
-    const go = (role) => {
-      const uuid = prompt(`Enter ${role.toUpperCase()} UUID:`);
-      if(!uuid) return;
-      // stash for the other pages to consume
-      localStorage.setItem('aiax_role', role);
-      localStorage.setItem('aiax_uuid', uuid.trim());
-      // route
-      location.href = role === 'owner' ? 'owner.html' : 'admin.html';
-    };
-
-    // Attach handlers when DOM is ready even on iOS Safari
-    document.addEventListener('DOMContentLoaded', () => {
-      const o = document.getElementById('btnOwner');
-      const a = document.getElementById('btnAdmin');
-      // guard in case something wraps them
-      [o,a].forEach(b=>{
-        if(!b) return;
-        b.style.pointerEvents = 'auto';
-        b.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); go(b.dataset.role); }, {passive:false});
-      });
-    });
-  </script>
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login • AiaxStock</title>
+<link rel="preconnect" href="https://esm.sh">
+<style>
+  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --pink4:#FFC2D1; }
+  body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+  .wrap{max-width:720px;margin:48px auto;padding:24px}
+  h1{margin:0 0 16px;font-size:48px}
+  p{font-size:18px;color:#222}
+  .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:24px}
+  .btn{flex:1 1 260px; padding:18px 20px;font-weight:800;font-size:22px;border-radius:16px;
+       background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff; border:none; box-shadow:0 8px 24px rgba(255,143,171,.35); cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card" style="margin-bottom:22px">
-      <h1>Login</h1>
-      <p class="lead">Choose a role then <b>type the UUID</b> to continue. (No magic link)</p>
-      <div class="btns">
-        <button id="btnOwner" class="btn" data-role="owner">Login as Owner</button>
-        <button id="btnAdmin" class="btn" data-role="admin">Login as Admin</button>
-      </div>
-    </div>
+<div class="wrap">
+  <h1>Login</h1>
+  <p>Choose a role then <strong>type the UUID</strong> to continue (no magic link).</p>
+  <div class="row">
+    <button class="btn" onclick="__APP__.loginAs('owner')">Login as Owner</button>
+    <button class="btn" onclick="__APP__.loginAs('admin')">Login as Admin</button>
   </div>
-  <!-- absolutely no full-screen overlays -->
-</body>
-</html>
+</div>
+
+<!-- config + app -->
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body></html>
