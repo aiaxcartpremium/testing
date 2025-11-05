@@ -1,138 +1,68 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin • AiaxStock</title>
-<link rel="preconnect" href="https://esm.sh">
-<style>
-  :root{ --pink2:#FFB3C6; --pink3:#FF8FAB; }
-  body{margin:0;font-family:system-ui,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
-  header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}
-  .brand{font-weight:900;font-size:20px;color:#7a0033}
-  nav a{margin-right:16px;text-decoration:none;font-weight:700;color:#0066dd}
-  .btn{background:linear-gradient(180deg,var(--pink2),var(--pink3));border:none;color:#fff;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
-  .card{background:#fff;border-radius:18px;box-shadow:0 12px 28px rgba(0,0,0,.08);padding:18px;margin:16px}
-  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-  label{font-weight:700;margin-top:8px;display:block}
-  select,input{width:100%;padding:12px;border-radius:10px;border:1px solid #e9d1da;background:#fff}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px}
-</style>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin • AiaxStock</title>
+  <style>
+    :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+    .nav{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 18px;background:#fff;box-shadow:var(--shadow)}
+    .brand{font-size:22px;font-weight:900;color:#8a1242}
+    .link{color:#1770ff;font-weight:800;cursor:pointer}
+    .btn{padding:10px 14px;border-radius:10px;border:none;background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;font-weight:800;cursor:pointer}
+    .card{background:#fff;margin:16px;border-radius:18px;box-shadow:var(--shadow);padding:18px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    select,input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid #f1d8e1;padding:10px}
+    .row{display:flex;gap:12px;align-items:center}
+    @media(max-width:840px){ .grid{grid-template-columns:1fr} }
+  </style>
 </head>
-<body>
-<header>
-  <div class="brand">AiaxStock Management — <b>Admin</b></div>
-  <nav>
-    <a href="owner.html">Go to Owner</a>
-    <button class="btn" onclick="__APP__.logout()">Logout</button>
-  </nav>
-</header>
-
-<section class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h2>Available Stocks (no details)</h2>
-    <button class="btn" id="btnRefresh">Refresh</button>
-  </div>
-  <table id="tblSum"><thead><tr><th>Product</th><th>Type</th><th>Quantity</th></tr></thead><tbody></tbody></table>
-</section>
-
-<section class="card">
-  <h2>Get Account</h2>
-  <div class="row3">
-    <div>
-      <label>Product</label>
-      <select id="a_product"></select>
-    </div>
-    <div>
-      <label>Account type</label>
-      <select id="a_type">
-        <option>shared profile</option>
-        <option>solo profile</option>
-        <option>shared account</option>
-        <option>solo account</option>
-        <option>invitation</option>
-        <option>head</option>
-        <option>edu</option>
-      </select>
-    </div>
-    <div>
-      <label>Duration</label>
-      <select id="a_duration">
-        <option value="7days">7 days</option>
-        <option value="14days">14 days</option>
-        <option value="1m">1 month</option>
-        <option value="2m">2 months</option>
-        <option value="3m">3 months</option>
-        <option value="auto-renew">auto-renew</option>
-      </select>
+<body id="adminPage">
+  <div class="nav">
+    <div class="brand">AiaxStock Management — Admin</div>
+    <div class="row">
+      <div class="link" id="goOwner">Go to Owner</div>
+      <button class="btn" id="btnLogout">Logout</button>
     </div>
   </div>
-  <div style="margin-top:12px">
-    <button class="btn" id="btnGet">Get Account</button>
-  </div>
 
-  <div id="credBox" style="margin-top:12px;display:none" class="card">
-    <div><b>Login:</b> <span id="cEmail"></span></div>
-    <div><b>Password:</b> <span id="cPass"></span></div>
-    <div><b>Profile:</b> <span id="cProf"></span></div>
-    <div><b>PIN:</b> <span id="cPin"></span></div>
-    <div><b>Expires:</b> <span id="cExp"></span></div>
-  </div>
-</section>
+  <section class="card">
+    <div id="adminAvailable">Loading available stocks…</div>
+  </section>
 
-<section class="card">
-  <h2>My Buyers Record</h2>
-  <table id="tblSales"><thead>
-    <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Buyer link</th><th>Price</th></tr>
-  </thead><tbody></tbody></table>
-</section>
+  <section class="card">
+    <h2>Get Account</h2>
+    <div class="grid">
+      <div>
+        <label>Product</label>
+        <select id="adminProductSelect"><option disabled selected>Select product</option></select>
+      </div>
+      <div>
+        <label>Account type</label>
+        <select id="adminTypeSelect"></select>
+      </div>
+      <div>
+        <label>Duration</label>
+        <select id="adminDurationSelect"></select>
+      </div>
+    </div>
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn" id="btnGetAccount">Get Account</button>
+    </div>
+    <div id="adminCreds" style="margin-top:12px"></div>
+  </section>
 
-<script src="config.js"></script>
-<script type="module" src="app.js"></script>
-<script>
-const A = window.__APP__;
-const ctx = A.assertRole(['admin','owner']); if(!ctx) throw 0;  // owner can view admin panel if you want to allow; set ['admin'] to restrict
-const uid = ctx.uid;
-const el = s=>document.querySelector(s);
+  <section class="card">
+    <h2>My Buyers Record</h2>
+    <div id="adminMySales">Loading…</div>
+  </section>
 
-async function loadSummaryAndDropdown(){
-  const sum = await A.fetchStockSummary();
-  const tb = el('#tblSum tbody');
-  tb.innerHTML = sum.map(r=>`<tr><td>${r.product_key}</td><td>${r.account_type}</td><td>${r.qty}</td></tr>`).join('');
-
-  // fill product dropdown with in-stock only
-  const distinct = [...new Set(sum.filter(x=>x.qty>0).map(x=>x.product_key))];
-  el('#a_product').innerHTML = distinct.map(k=>`<option>${k}</option>`).join('');
-}
-
-el('#btnRefresh').onclick = loadSummaryAndDropdown;
-
-el('#btnGet').onclick = async()=>{
-  try{
-    const product = el('#a_product').value;
-    const type = el('#a_type').value;
-    const duration = el('#a_duration').value;
-    const row = await A.getAccount({admin: uid, product, type, duration});
-    if(!row){ alert('No available stock for this selection.'); return; }
-    el('#cEmail').textContent = row.email || '';
-    el('#cPass').textContent  = row.password || '';
-    el('#cProf').textContent  = row.profile_name || '';
-    el('#cPin').textContent   = row.pin || '';
-    el('#cExp').textContent   = row.expires_at ? new Date(row.expires_at).toLocaleString() : '—';
-    el('#credBox').style.display = 'block';
-    await refreshMySales();
-    await loadSummaryAndDropdown(); // stock decremented
-  }catch(err){ console.error(err); alert('Get failed: '+err.message); }
-};
-
-async function refreshMySales(){
-  const rows = await A.listMySales(uid);
-  el('#tblSales tbody').innerHTML = rows.map(r=>`
-    <tr><td>${r.id}</td><td>${r.product_key}</td><td>${r.account_type}</td>
-    <td>${new Date(r.created_at).toLocaleString()}</td>
-    <td>${r.expires_at?new Date(r.expires_at).toLocaleString():'—'}</td>
-    <td>${r.buyer_link||''}</td><td>${r.price??''}</td></tr>`).join('');
-}
-
-loadSummaryAndDropdown();
-refreshMySales();
-</script>
-</body></html>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
