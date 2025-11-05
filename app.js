@@ -221,10 +221,10 @@ async function ownerFetchRecords(){
     return data||[];
   }catch{
     const res = await supabase
-      .from('sales')
-      .select('id,product_key,account_type,created_at,expires_at,buyer_link,price')
-      .order('id',{ascending:false}).limit(500);
-    return res.data || [];
+  .from('sales')
+  .select('id,product_key,account_type,created_at,expires_at,buyer_link,price,admin_id')
+  .order('id',{ascending:false})
+  .limit(500);
   }
 }
 
@@ -384,20 +384,27 @@ async function adminGetAccount(){
   if(error){ console.error(error); return alert('get_account failed'); }
 
   const r = (data&&data[0]) || null;
-  const out = qs('#adminCreds');
-  if(out){
-    if(!r){ out.textContent = 'No stock matched.'; }
-    else {
-      out.innerHTML = `
-        <div class="card" style="box-shadow:none;border:1px solid #ffd1df">
-          <div><b>Email:</b> ${r.email||'-'}</div>
-          <div><b>Password:</b> ${r.password||'-'}</div>
-          <div><b>Profile:</b> ${r.profile_name||'-'} &nbsp; <b>PIN:</b> ${r.pin||'-'}</div>
-          <div><b>Expires:</b> ${fmtDT(r.expires_at)}</div>
+  // ...after: const r = (data&&data[0]) || null;
+const out = qs('#adminCreds');
+const products = await fetchProducts();
+const labelOf = (key)=> products.find(p=>p.key===key)?.label || key;
+
+if(out){
+  if(!r){ out.textContent = 'No stock matched.'; }
+  else {
+    out.innerHTML = `
+      <div class="card">
+        <div style="margin-bottom:6px;">
+          <b>${labelOf(product_key)}</b> • ${account_type} • ${durationLabel(r.duration_code || duration_code)}
         </div>
-      `;
-    }
+        <div><b>Email:</b> ${r.email || '-'}</div>
+        <div><b>Password:</b> ${r.password || '-'}</div>
+        <div><b>Profile:</b> ${r.profile_name || '-'} &nbsp; <b>PIN:</b> ${r.pin || '-'}</div>
+        <div><b>Expires:</b> ${fmtDT(r.expires_at)}</div>
+      </div>
+    `;
   }
+}
   adminRefreshAll(); // reflect stock decrement
 }
 
