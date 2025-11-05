@@ -76,12 +76,13 @@ function fillStaticSelectsOwner(){
   }
 }
 
+// DROP-IN REPLACEMENT
 async function ownerAddStockSubmit(e){
   e.preventDefault();
 
   const product_key   = qs('#productSelect')?.value;
   const account_type  = qs('#typeSelect')?.value;
-  const duration_code = qs('#durationSelect')?.value;   // UI value like '7d','1m','auto'
+  const duration_val  = qs('#durationSelect')?.value;   // e.g. '7d','1m','auto'
   const quantity      = parseInt(qs('#qtyInput')?.value || '1', 10);
 
   const email         = qs('#emailInput')?.value.trim() || null;
@@ -92,20 +93,28 @@ async function ownerAddStockSubmit(e){
 
   if(!product_key)   return alert('Please select a product');
   if(!account_type)  return alert('Please select account type');
-  if(!duration_code) return alert('Please select duration');
+  if(!duration_val)  return alert('Please select duration');
   if(quantity < 1)   return alert('Quantity must be at least 1');
 
-  // IMPORTANT: your table uses duration_choice and (likely) owner_id
-  const payload = {
-    product_key,
-    account_type,
-    duration_choice: duration_code,   // <-- map UI to DB column name
-    quantity,
+  // base fields
+  const base = {
+    product_key, account_type, quantity,
     email, password, profile_name, pin, notes,
-    owner_id: currentUUID()           // <-- make sure owner_id is set
+    owner_id: currentUUID()
   };
 
-  const { error } = await supabase.from('stocks').insert([payload]);
+  // Try 1: duration_choice
+  let { error } = await supabase.from('stocks').insert([{
+    ...base, duration_choice: duration_val
+  }]);
+
+  // If the column name is different, retry as duration_code
+  if (error && /duration_choice/i.test(error.message || '')) {
+    const res2 = await supabase.from('stocks').insert([{
+      ...base, duration_code: duration_val
+    }]);
+    error = res2.error;
+  }
 
   if (error) {
     console.error('add stock error:', error);
@@ -116,9 +125,8 @@ async function ownerAddStockSubmit(e){
   e.target.reset();
   fillStaticSelectsOwner();
   await fillProductsSelect(qs('#productSelect'));
-  ownerRenderStocks(); // refresh table
+  ownerRenderStocks();
 }
-
 async function fetchStocksSummaryOwner(){
   try{
     let { data, error } = await supabase.from('stocks_summary')
