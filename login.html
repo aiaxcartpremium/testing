@@ -1,19 +1,30 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Login</title>
-<link rel="stylesheet" href="style.css"/>
-<script src="config.js"></script>
-<script src="app.js"></script>
-</head><body>
-<div class="container">
-  <div class="card">
-    <h1>Login</h1>
-    <p>Choose a role. This demo uses fixed UUIDs (no magic link).</p>
-    <div class="row">
-      <button onclick="setUser('owner', APP_CONFIG.ownerId); location.href='owner.html'">Login as Owner</button>
-      <button onclick="setUser('admin', APP_CONFIG.adminIds[0]); location.href='admin.html'">Login as Admin 1</button>
-      <button class="btn-outline" onclick="setUser('admin', APP_CONFIG.adminIds[1]); location.href='admin.html'">Login as Admin 2</button>
-    </div>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Login • AiaxStock</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <script type="module">
+    import { setRole } from "./app.js";
+    function ask(title){ const v = prompt(title+"\nPaste the UUID:",""); return v && v.trim(); }
+    window.loginOwner = ()=>{ const id = ask("Owner UUID"); if(!id) return; setRole("owner", id); location.href="./owner.html"; };
+    window.loginAdmin = ()=>{ const id = ask("Admin UUID"); if(!id) return; setRole("admin", id); location.href="./admin.html"; };
+  </script>
+  <style>.hero{padding:26px}.cta{display:flex;gap:16px;flex-wrap:wrap}</style>
+</head>
+<body>
+  <div class="nav"><div class="nav-inner container"><div class="brand">AiaxStock Management</div></div></div>
+  <div class="container">
+    <section class="hero card">
+      <h1>Login</h1>
+      <p>Choose a role then <b>type the UUID</b> to continue.</p>
+      <div class="cta">
+        <button class="btn" onclick="loginOwner()">Login as Owner</button>
+        <button class="btn" onclick="loginAdmin()">Login as Admin</button>
+      </div>
+    </section>
   </div>
-</div>
-</body></html>
+  <div id="toast" class="toast"></div>
+</body>
+</html>
