@@ -1,2 +1,71 @@
 <!doctype html>
-<meta http-equiv="refresh" content="0; url=login.html">
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Login</title>
+  <link rel="stylesheet" href="./style.css"/>
+</head>
+<body>
+  <div class="container">
+    <div id="topNav"></div>
+    <h1>Login</h1>
+    <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
+
+    <div class="role">
+      <div class="card-btn" id="chooseOwner">Login as Owner</div>
+      <div class="card-btn" id="chooseAdmin">Login as Admin</div>
+    </div>
+
+    <!-- Owner form -->
+    <div id="ownerForm" class="hidden mt-16">
+      <h2>Owner UUID</h2>
+      <input id="ownerUUID" class="input" placeholder="paste owner UUID"/>
+      <div class="mt-12"><button class="btn" id="ownerLoginBtn">Login</button></div>
+    </div>
+
+    <!-- Admin form -->
+    <div id="adminForm" class="hidden mt-16">
+      <h2>Admin UUID</h2>
+      <input id="adminUUID" class="input" placeholder="paste admin UUID"/>
+      <div class="mt-12">
+        <button class="btn" id="adminLoginBtn">Login</button>
+      </div>
+      <p class="mt-12" style="opacity:.75;font-size:13px">Tip: Admin 1 or Admin 2 UUID allowed.</p>
+    </div>
+
+    <p class="mt-24"><span class="badge">Palette</span> Lavender Blush • Pastel Pink • Light Pink • Pink Champagne</p>
+  </div>
+
+  <!-- Common helpers -->
+  <?!-- keep this file next to index.html -->
+  <script src="./common.js"></script>
+  <script>
+    renderNav('topNav');
+
+    const chooseOwner = document.getElementById('chooseOwner');
+    const chooseAdmin = document.getElementById('chooseAdmin');
+    const ownerForm   = document.getElementById('ownerForm');
+    const adminForm   = document.getElementById('adminForm');
+
+    chooseOwner.onclick = () => { ownerForm.classList.remove('hidden'); adminForm.classList.add('hidden'); };
+    chooseAdmin.onclick = () => { adminForm.classList.remove('hidden'); ownerForm.classList.add('hidden'); };
+
+    document.getElementById('ownerLoginBtn').onclick = ()=>{
+      const val = (document.getElementById('ownerUUID').value || '').trim();
+      if (val === '') return alert('Please paste the Owner UUID.');
+      if (val !== FIXED.owner) return alert('Wrong Owner UUID.');
+      setSession('owner', val);
+      location.href = './owner.html';
+    };
+
+    document.getElementById('adminLoginBtn').onclick = ()=>{
+      const val = (document.getElementById('adminUUID').value || '').trim();
+      if (val === '') return alert('Please paste an Admin UUID.');
+      if (val !== FIXED.admin1 && val !== FIXED.admin2) return alert('Wrong Admin UUID.');
+      setSession('admin', val);
+      location.href = './admin.html';
+    };
+  </script>
+</body>
+</html>
