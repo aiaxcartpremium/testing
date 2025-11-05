@@ -3,21 +3,39 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AiaxStocks Management</title>
+  <title>AiaStocks Management</title>
   <link rel="stylesheet" href="./style.css"/>
+  <style>
+    .btn-lg{
+      width:100%;
+      min-height:68px;
+      border-radius:16px;
+      background:linear-gradient(180deg,#ffe5ec 0%,#ffc2d1 100%);
+      color:#8a1049;
+      border:1px solid #ffc2d1;
+      box-shadow:0 10px 24px rgba(255,194,209,.55);
+      font-weight:800;font-size:20px;
+    }
+    .btn-lg:active{transform:translateY(1px)}
+    .panel{padding:16px 0}
+    .hidden{display:none!important}
+    .note{opacity:.75}
+  </style>
 </head>
 <body>
   <div class="container">
-    <div id="topNav"></div>
-    <h1>Login</h1>
-    
-    <div class="role">
-      <div class="card-btn" id="chooseOwner">Login as Owner</div>
-      <div class="card-btn" id="chooseAdmin">Login as Admin</div>
+    <h1>AiaStocks Management</h1>
+    <p>To login, choose a role then <b>type the UUID</b> to continue (no magic link).</p>
+
+    <div class="panel">
+      <button id="chooseOwner" class="btn-lg">Login as Owner</button>
+    </div>
+    <div class="panel">
+      <button id="chooseAdmin" class="btn-lg">Login as Admin</button>
     </div>
 
     <!-- Owner form -->
-    <div id="ownerForm" class="hidden mt-16">
+    <div id="ownerForm" class="hidden">
       <h2>Owner UUID</h2>
       <input id="ownerUUID" class="input" placeholder="paste owner UUID"/>
       <div class="mt-12"><button class="btn" id="ownerLoginBtn">Login</button></div>
@@ -27,43 +45,61 @@
     <div id="adminForm" class="hidden mt-16">
       <h2>Admin UUID</h2>
       <input id="adminUUID" class="input" placeholder="paste admin UUID"/>
-      <div class="mt-12">
-        <button class="btn" id="adminLoginBtn">Login</button>
-      </div>
-      <p class="mt-12" style="opacity:.75;font-size:13px">Tip: Admin 1 or Admin 2 UUID allowed.</p>
+      <div class="mt-12"><button class="btn" id="adminLoginBtn">Login</button></div>
+      <p class="note mt-12">Tip: Admin 1 or Admin 2 UUID allowed.</p>
     </div>
 
-    </div>
+    
+  </div>
 
-  <!-- Common helpers -->
-  <?!-- keep this file next to index.html -->
-  <script src="./common.js"></script>
+  <!-- helpers (logout, session) -->
   <script>
-    renderNav('topNav');
+    // simple session helpers kept inline to avoid loading issues
+    const FIXED = {
+      owner:  '8cd15b4b-0755-4843-a8d5-2652fa408fe5',
+      admin1: '4e63c32b-cc75-48de-b111-e8a977d868a2',
+      admin2: '20851a7b-ef92-41a1-80d1-d2a6081396d5',
+    };
+    function setSession(role, user_id){
+      localStorage.setItem('role', role);
+      localStorage.setItem('user_id', user_id);
+    }
+  </script>
 
+  <!-- page logic -->
+  <script>
     const chooseOwner = document.getElementById('chooseOwner');
     const chooseAdmin = document.getElementById('chooseAdmin');
     const ownerForm   = document.getElementById('ownerForm');
     const adminForm   = document.getElementById('adminForm');
 
-    chooseOwner.onclick = () => { ownerForm.classList.remove('hidden'); adminForm.classList.add('hidden'); };
-    chooseAdmin.onclick = () => { adminForm.classList.remove('hidden'); ownerForm.classList.add('hidden'); };
+    // make sure clicks always work
+    chooseOwner.addEventListener('click', () => {
+      ownerForm.classList.remove('hidden');
+      adminForm.classList.add('hidden');
+      document.getElementById('ownerUUID').focus();
+    });
+    chooseAdmin.addEventListener('click', () => {
+      adminForm.classList.remove('hidden');
+      ownerForm.classList.add('hidden');
+      document.getElementById('adminUUID').focus();
+    });
 
-    document.getElementById('ownerLoginBtn').onclick = ()=>{
+    document.getElementById('ownerLoginBtn').addEventListener('click', () => {
       const val = (document.getElementById('ownerUUID').value || '').trim();
-      if (val === '') return alert('Please paste the Owner UUID.');
+      if (!val) return alert('Please paste the Owner UUID.');
       if (val !== FIXED.owner) return alert('Wrong Owner UUID.');
       setSession('owner', val);
       location.href = './owner.html';
-    };
+    });
 
-    document.getElementById('adminLoginBtn').onclick = ()=>{
+    document.getElementById('adminLoginBtn').addEventListener('click', () => {
       const val = (document.getElementById('adminUUID').value || '').trim();
-      if (val === '') return alert('Please paste an Admin UUID.');
+      if (!val) return alert('Please paste an Admin UUID.');
       if (val !== FIXED.admin1 && val !== FIXED.admin2) return alert('Wrong Admin UUID.');
       setSession('admin', val);
       location.href = './admin.html';
-    };
+    });
   </script>
 </body>
 </html>
