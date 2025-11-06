@@ -15,10 +15,11 @@ window.APP = {
     'Canva','CapCut','CamScanner','MS365','PicsArt','QuillBot','Scribd','Studocu','iQIYI','Viu','Bilibili'
   ],
 
-  ACCOUNT_TYPES: ['shared profile','solo profile','shared account','invitation','head','edu'],
+  ACCOUNT_TYPES: ['shared profile','solo profile','shared account','solo account','invitation','head','edu'],
   DURATIONS: [
     ['7 days','7d'], ['14 days','14d'],
-    ['1 month','1m'], ['2 months','2m'], ['3 months','3m'],
-    ['5 months','5m'], ['6 months','6m'], ['9 months','9m'], ['10 months','10m']
+    ['1 month','1m'], ['2 months','2m'], ['3 months','3m'],['4 months','4m'],
+    ['5 months','5m'], ['6 months','6m'],['7 months','7m'],['8 months','8m'],
+    ['9 months','9m'], ['10 months','10m'], ['11 months','11m'], ['12 months','12m']
   ]
 };
