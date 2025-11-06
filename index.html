@@ -1,222 +1,222 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AiaxStock Management</title>
-  <link rel="stylesheet" href="style.css?v=8">
-<script defer src="config.js?v=8"></script>
-<script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script defer src="app.js?v=8"></script>
+
+  <!-- Style -->
+  <link rel="stylesheet" href="style.css?v=9" />
+
+  <!-- Config + Supabase + App -->
+  <script defer src="config.js?v=9"></script>
+  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script defer src="app.js?v=9"></script>
 </head>
+
 <body>
+  <!-- Toast + Loading -->
+  <div class="loading-overlay hidden">Loading...</div>
+  <div class="toast"></div>
 
-  <!-- Toast / Loading (never blocks taps) -->
-  <div id="toast" class="toast hidden">Loading…</div>
-  <div id="overlay" class="loading-overlay hidden"></div>
-
-  <!-- ===== Login ===== -->
-  <main id="screen-login" class="container">
+  <!-- LOGIN PAGE -->
+  <section id="viewLogin" class="container">
     <h1>Login</h1>
     <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
 
-    <button id="btn-owner" class="btn btn-primary">Login as Owner</button>
+    <div class="login-columns">
+      <!-- OWNER LOGIN -->
+      <div class="login-card">
+        <button id="btnLoginOwner" class="btn btn-primary">Login as Owner</button>
 
-    <div id="owner-box" class="login-card hidden">
-      <label for="owner-uuid">Owner UUID</label>
-      <input id="owner-uuid" type="text" inputmode="text" autocomplete="off" placeholder="paste owner UUID" />
-      <button id="owner-continue" class="btn btn-primary">Continue</button>
-    </div>
+        <div id="ownerLoginCard" class="account-details hidden">
+          <label for="ownerUuid">Owner UUID</label>
+          <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off" />
+          <div class="actions">
+            <button id="continueOwner" class="btn btn-secondary">Continue</button>
+          </div>
+        </div>
+      </div>
 
-    <button id="btn-admin" class="btn btn-primary">Login as Admin</button>
+      <!-- ADMIN LOGIN -->
+      <div class="login-card">
+        <button id="btnLoginAdmin" class="btn btn-primary">Login as Admin</button>
 
-    <div id="admin-box" class="login-card hidden">
-      <label for="admin-uuid">Admin UUID</label>
-      <input id="admin-uuid" type="text" inputmode="text" autocomplete="off" placeholder="paste admin UUID" />
-      <button id="admin-continue" class="btn btn-primary">Continue</button>
-    </div>
-
-    <section id="viewLogin" class="container">
-  <h1>Login</h1>
-  <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
-
-  <div class="login-columns">
-    <!-- LEFT: Owner -->
-    <div class="login-card">
-      <button id="btnLoginOwner" class="btn btn-primary" type="button">Login as Owner</button>
-
-      <div id="ownerLoginCard" class="account-details hidden">
-        <label for="ownerUuid">Owner UUID</label>
-        <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off">
-        <div class="actions">
-          <button id="continueOwner" class="btn btn-secondary" type="button">Continue</button>
+        <div id="adminLoginCard" class="account-details hidden">
+          <label for="adminUuid">Admin UUID</label>
+          <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off" />
+          <div class="actions">
+            <button id="continueAdmin" class="btn btn-secondary">Continue</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- RIGHT: Admin -->
-    <div class="login-card">
-      <button id="btnLoginAdmin" class="btn btn-primary" type="button">Login as Admin</button>
+    <p class="palette">
+      Palette • Lavender Blush • Pastel Pink • Light Pink • Pink Champagne
+    </p>
+  </section>
 
-      <div id="adminLoginCard" class="account-details hidden">
-        <label for="adminUuid">Admin UUID</label>
-        <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off">
-        <div class="actions">
-          <button id="continueAdmin" class="btn btn-secondary" type="button">Continue</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-  </main>
-
-  <!-- ===== Owner Panel ===== -->
-  <main id="screen-owner" class="container hidden">
-    <header class="topbar">
-      <h1>AiaxStock Management — <span class="role">Owner</span></h1>
+  <!-- OWNER PANEL -->
+  <section id="viewOwner" class="container hidden">
+    <div class="topbar">
+      <h1>AiaxStock Management — Owner</h1>
       <div class="toolbar">
-        <a id="link-admin" class="btn btn-ghost">Go to Admin</a>
-        <button id="btn-logout-o" class="btn btn-secondary">Logout</button>
+        <button id="goToAdmin" class="btn btn-ghost">Go to Admin</button>
+        <button class="btn btn-secondary btnLogout">Logout</button>
       </div>
-    </header>
+    </div>
 
-    <nav class="tabs">
-      <button class="tab active" data-tab="owner-add">Add stock</button>
-      <button class="tab" data-tab="owner-stocks">Stocks</button>
-      <button class="tab" data-tab="owner-records">Records</button>
-    </nav>
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-target="tabAdd">Add Stock</button>
+      <button class="tab" data-target="tabStocks">Stocks</button>
+      <button class="tab" data-target="tabRecords">Records</button>
+    </div>
 
     <!-- Add Stock -->
-    <section id="owner-add" class="card">
+    <div id="tabAdd" class="tab-page">
       <div class="grid-2">
-        <div>
-          <label>Product</label>
-          <select id="o-product"></select>
-        </div>
-        <div>
-          <label>Account type</label>
-          <select id="o-type"></select>
-        </div>
-        <div>
-          <label>Duration</label>
-          <select id="o-duration"></select>
-        </div>
-        <div>
-          <label>Quantity</label>
-          <input id="o-qty" type="number" min="1" value="1" />
-        </div>
-        <div>
-          <label>Email (optional)</label>
-          <input id="o-email" type="text" placeholder="login email" />
-        </div>
-        <div>
-          <label>Password (optional)</label>
-          <input id="o-pass" type="text" placeholder="login password" />
-        </div>
-        <div>
-          <label>Profile (optional)</label>
-          <input id="o-profile" type="text" placeholder="profile name" />
-        </div>
-        <div>
-          <label>PIN (optional)</label>
-          <input id="o-pin" type="text" placeholder="profile pin" />
-        </div>
-        <div class="full">
-          <label>Notes</label>
-          <input id="o-notes" type="text" placeholder="any notes" />
-        </div>
+        <label>Product
+          <select id="productSelectOwner"></select>
+        </label>
+        <label>Account type
+          <select id="typeSelectOwner"></select>
+        </label>
+        <label>Duration
+          <select id="durSelectOwner"></select>
+        </label>
+        <label>Quantity
+          <input id="oaQty" type="number" value="1" min="1" />
+        </label>
       </div>
+
+      <div class="grid-2">
+        <label>Email (optional)
+          <input id="oaEmail" placeholder="login email" />
+        </label>
+        <label>Password (optional)
+          <input id="oaPass" placeholder="login password" />
+        </label>
+        <label>Profile (optional)
+          <input id="oaProfile" placeholder="profile name" />
+        </label>
+        <label>PIN (optional)
+          <input id="oaPin" placeholder="profile pin" />
+        </label>
+      </div>
+
+      <label>Notes
+        <input id="oaNotes" placeholder="any notes" />
+      </label>
+
       <div class="actions">
-        <button id="o-add-stock" class="btn btn-primary">Add stock</button>
+        <button id="oaAddBtn" class="btn btn-primary">Add Stock</button>
       </div>
-    </section>
+    </div>
 
     <!-- Stocks -->
-    <section id="owner-stocks" class="card hidden">
+    <div id="tabStocks" class="tab-page hidden">
+      <h2>Current Stocks</h2>
       <div class="table-wrap">
-        <table class="table" id="o-stocks-table">
+        <table class="table" id="ownerStocksTable">
           <thead>
             <tr>
-              <th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
+              <th>Product</th>
+              <th>Type</th>
+              <th>Duration</th>
+              <th>Qty</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="actions">
-        <button id="o-refresh" class="btn btn-secondary">Refresh</button>
-      </div>
-    </section>
+    </div>
 
-    <!-- Records (placeholder; CRUD batch comes next) -->
-    <section id="owner-records" class="card hidden">
+    <!-- Records -->
+    <div id="tabRecords" class="tab-page hidden">
+      <h2>Sales / Buyer Records</h2>
       <div class="table-wrap">
-        <table class="table" id="o-records-table">
+        <table class="table" id="ownerRecordsTable">
           <thead>
             <tr>
-              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th>
+              <th>ID</th>
+              <th>Product</th>
+              <th>Type</th>
+              <th>Created</th>
+              <th>Expires</th>
+              <th>Admin</th>
+              <th>Warranty</th>
+              <th>Voided</th>
+              <th></th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-    </section>
-  </main>
+    </div>
+  </section>
 
-  <!-- ===== Admin Panel ===== -->
-  <main id="screen-admin" class="container hidden">
-    <header class="topbar">
-      <h1>AiaxStock Management — <span class="role">Admin</span></h1>
+  <!-- ADMIN PANEL -->
+  <section id="viewAdmin" class="container hidden">
+    <div class="topbar">
+      <h1>AiaxStock Management — Admin</h1>
       <div class="toolbar">
-        <a id="link-owner" class="btn btn-ghost">Go to Owner</a>
-        <button id="btn-logout-a" class="btn btn-secondary">Logout</button>
+        <button id="goToOwner" class="btn btn-ghost">Go to Owner</button>
+        <button class="btn btn-secondary btnLogout">Logout</button>
       </div>
-    </header>
+    </div>
 
-    <section class="card">
-      <h2>Available Stocks</h2>
-      <div class="table-wrap">
-        <table class="table" id="a-stocks">
-          <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="actions">
-        <button id="a-refresh" class="btn btn-secondary">Refresh</button>
-      </div>
-    </section>
+    <h2>Available Stocks</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Type</th>
+            <th>Duration</th>
+            <th>Qty</th>
+          </tr>
+        </thead>
+        <tbody id="adminStocksBody">
+          <tr><td colspan="4">No data yet</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-    <section class="card">
-      <h2>Get Account</h2>
-      <div class="grid-3">
-        <div>
-          <label>Product</label>
-          <select id="a-product"></select>
-        </div>
-        <div>
-          <label>Account type</label>
-          <select id="a-type"></select>
-        </div>
-        <div>
-          <label>Duration</label>
-          <select id="a-duration"></select>
-        </div>
-      </div>
-      <div class="actions">
-        <button id="a-get" class="btn btn-primary">Get Account</button>
-      </div>
-      <div id="a-details" class="account-details hidden"></div>
-    </section>
+    <h2>Get Account</h2>
+    <div class="grid-3">
+      <label>Product
+        <select id="productSelectAdmin"></select>
+      </label>
+      <label>Account type
+        <select id="typeSelectAdmin"></select>
+      </label>
+      <label>Duration
+        <select id="durSelectAdmin"></select>
+      </label>
+    </div>
 
-    <section class="card">
-      <h2>My Buyers Record</h2>
-      <div class="table-wrap">
-        <table class="table" id="a-records">
-          <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+    <div class="actions">
+      <button id="getAccountBtn" class="btn btn-primary">Get Account</button>
+    </div>
+
+    <h2>My Buyers Record</h2>
+    <div class="table-wrap">
+      <table class="table" id="adminRecordsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Product</th>
+            <th>Type</th>
+            <th>Created</th>
+            <th>Expires</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 </body>
 </html>
