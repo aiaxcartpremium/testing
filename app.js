@@ -256,93 +256,265 @@
     $("#viewOwner")?.classList.add("hidden");
     $("#viewAdmin")?.classList.remove("hidden");
   }
-// ---------- Owner: Add Stock (form + submit)
-function wireOwnerAddStock() {
-  const btn = document.getElementById("btnAddStock");
-  if (!btn) return; // walang Add Stock button
+  // ---------- Stock cache + helpers (Admin filtering)
+  let STOCK_CACHE = []; // [{product, account_type, duration_code, qty}]
 
-  // form fields (IDs dapat tugma sa HTML mo)
-  const $product = document.getElementById("productSelectOwner");
-  const $type    = document.getElementById("typeSelectOwner");
-  const $dur     = document.getElementById("durSelectOwner");
-  const $qty     = document.getElementById("qtyOwner");
-  const $email   = document.getElementById("emailOwner");
-  const $pass    = document.getElementById("passOwner");
-  const $profile = document.getElementById("profileOwner");
-  const $pin     = document.getElementById("pinOwner");
-  const $notes   = document.getElementById("notesOwner");
+  async function fetchStockSummary() {
+    // Prefer a view named 'stock_summary' if you created one
+    try {
+      const { data, error } = await supabase
+        .from('stock_summary')
+        .select('product,account_type,duration_code,qty')
+        .gte('qty', 1);
+      if (error) throw error;
+      if (data) return data;
+    } catch (_) {}
 
-  let busy = false;
+    // Fallback: read raw rows from 'stocks' and aggregate on the client
+    try {
+      const { data, error } = await supabase
+        .from('stocks')
+        .select('product,account_type,duration_code,qty');
+      if (error) throw error;
 
-  btn.addEventListener("click", async (e) => {
-    e.preventDefault();
-    if (busy) return;
+      const m = new Map();
+      for (const r of (data || [])) {
+        const key = `${r.product}||${r.account_type}||${r.duration_code}`;
+        const prev = m.get(key) || 0;
+        const add = Number(r.qty ?? 0);
+        m.set(key, prev + add);
+      }
+      const rows = [];
+      m.forEach((qty, key) => {
+        if (qty > 0) {
+          const [product, account_type, duration_code] = key.split('||');
+          rows.push({ product, account_type, duration_code, qty });
+        }
+      });
+      return rows;
+    } catch (e) {
+      console.error(e);
+      toast('Failed to load stocks');
+      return [];
+    }
+  }
 
-    // basic validations
-    const product       = ($product?.value || "").trim();
-    const account_type  = ($type?.value || "").trim();
-    const duration_code = ($dur?.value || "").trim();
-    const qty           = parseInt(($qty?.value || "1"), 10);
+  function renderAdminStockTable() {
+    const tbody = document.querySelector('#adminStockBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!STOCK_CACHE.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'No data yet';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    for (const r of STOCK_CACHE) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.product}</td>
+        <td>${r.account_type}</td>
+        <td>${r.duration_code}</td>
+        <td>${r.qty}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
 
-    if (!product)       return toast("Pick a product");
-    if (!account_type)  return toast("Pick account type");
-    if (!duration_code) return toast("Pick duration");
-    if (!qty || qty < 1) return toast("Quantity must be ≥ 1");
-    if (!S.uid || S.role !== "owner") return alert("Owner session required.");
+  function filterAdminSelectorsFromStock() {
+    const prodSel = document.querySelector('#productSelectAdmin');
+    const typeSel = document.querySelector('#typeSelectAdmin');
+    const durSel  = document.querySelector('#durSelectAdmin');
+    if (!prodSel || !typeSel || !durSel) return;
 
-    const payload = {
-      product,
-      account_type,
-      duration_code,
-      qty,
-      email:        ($email?.value || null) || null,
-      password:     ($pass?.value || null) || null,
-      profile_name: ($profile?.value || null) || null,
-      pin:          ($pin?.value || null) || null,
-      notes:        ($notes?.value || null) || null,
-      owner_uid:    S.uid
+    // Build sets based on current stock
+    const products = [...new Set(STOCK_CACHE.map(r => r.product))].sort();
+    fillSelect('#productSelectAdmin', products);
+
+    const applyTypeAndDur = () => {
+      const p = prodSel.value;
+      const types = [...new Set(
+        STOCK_CACHE.filter(r => r.product === p).map(r => r.account_type)
+      )].sort();
+      fillSelect('#typeSelectAdmin', types);
+
+      const t = typeSel.value;
+      const durs = STOCK_CACHE
+        .filter(r => r.product === p && r.account_type === t)
+        .map(r => r.duration_code);
+      // Match to UI labels if you have a mapping; otherwise show codes as labels
+      const mapped = (S.durations.length ? 
+        S.durations.filter(([label, code]) => durs.includes(code)) :
+        durs.map(code => [code, code])
+      );
+      fillSelect('#durSelectAdmin', mapped);
     };
 
-    try {
-      busy = true;
+    prodSel.onchange = applyTypeAndDur;
+    typeSel.onchange = applyTypeAndDur;
+    applyTypeAndDur();
+  }
+
+  async function refreshAdminArea() {
+    STOCK_CACHE = await fetchStockSummary();
+    renderAdminStockTable();
+    filterAdminSelectorsFromStock();
+  }
+
+  // ---------- Owner: Add Stock
+  function wireOwnerAddStock() {
+    const btn = document.querySelector('#btnAddStock');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+      const product = (document.querySelector('#productSelectOwner')?.value || '').trim();
+      const account_type = (document.querySelector('#typeSelectOwner')?.value || '').trim();
+      const duration_code = (document.querySelector('#durSelectOwner')?.value || '').trim();
+      const qty = Number(document.querySelector('#qtyInputOwner')?.value || '0');
+
+      const email = document.querySelector('#emailInputOwner')?.value || null;
+      const password = document.querySelector('#passInputOwner')?.value || null;
+      const profile_name = document.querySelector('#profileInputOwner')?.value || null;
+      const pin = document.querySelector('#pinInputOwner')?.value || null;
+      const notes = document.querySelector('#notesInputOwner')?.value || null;
+
+      if (!product || !account_type || !duration_code || !qty || qty < 1) {
+        toast('Fill product, type, duration, and quantity ≥ 1');
+        return;
+      }
+
       setLoading(true);
-
-      // 1) Try RPC add_stock(payload)
-      let rpcError = null;
       try {
-        const { error } = await supabase.rpc("add_stock", payload);
-        rpcError = error || null;
-      } catch (e) {
-        rpcError = e;
+        // Try RPC first if you have one in SQL
+        let ok = false;
+        try {
+          const { data, error } = await supabase.rpc('add_stock', {
+            p_product: product,
+            p_type: account_type,
+            p_duration_code: duration_code,
+            p_qty: qty,
+            p_email: email,
+            p_password: password,
+            p_profile: profile_name,
+            p_pin: pin,
+            p_notes: notes,
+            p_owner: S.uid
+          });
+          if (error) throw error;
+          ok = true;
+        } catch (e) {
+          // Fallback: direct insert into 'stocks'
+          const { error } = await supabase.from('stocks').insert([{
+            product,
+            account_type,
+            duration_code,
+            qty,
+            email,
+            password,
+            profile_name,
+            pin,
+            notes,
+            created_by: S.uid
+          }]);
+          if (error) throw error;
+          ok = true;
+        }
+
+        if (ok) {
+          toast('Stock added');
+          // Clear only quantity & credentials; keep selectors
+          document.querySelector('#qtyInputOwner').value = '1';
+          ['#emailInputOwner','#passInputOwner','#profileInputOwner','#pinInputOwner','#notesInputOwner']
+            .forEach(sel => { const el = document.querySelector(sel); if (el) el.value = ''; });
+          await refreshAdminArea();
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Add stock failed:\n' + (err?.message || err));
+      } finally {
+        setLoading(false);
+      }
+    });
+  }
+
+  // ---------- Admin: Get Account
+  function wireAdminGetAccount() {
+    const btn = document.querySelector('#btnGetAccount');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+      const product = (document.querySelector('#productSelectAdmin')?.value || '').trim();
+      const account_type = (document.querySelector('#typeSelectAdmin')?.value || '').trim();
+      const duration_code = (document.querySelector('#durSelectAdmin')?.value || '').trim();
+      if (!product || !account_type || !duration_code) {
+        toast('Pick product, type and duration'); return;
       }
 
-      // 2) If walang RPC, direct insert sa 'stocks'
-      if (rpcError) {
-        const { error: e2 } = await supabase.from("stocks").insert([payload]);
-        if (e2) throw e2;
+      // Block if not available in cache
+      const found = STOCK_CACHE.find(r =>
+        r.product === product && r.account_type === account_type && r.duration_code === duration_code && r.qty > 0
+      );
+      if (!found) { toast('Out of stock'); return; }
+
+      setLoading(true);
+      try {
+        // Prefer a secure RPC that returns the account + records the sale
+        let done = false;
+        try {
+          const { data, error } = await supabase.rpc('get_account_and_record_sale', {
+            p_product: product,
+            p_type: account_type,
+            p_duration_code: duration_code,
+            p_admin: S.uid
+          });
+          if (error) throw error;
+          // You can render the returned details if your RPC returns them
+          done = true;
+        } catch (e) {
+          // Fallback: naive client-side decrement of one matching row
+          // 1) fetch a row with qty>0
+          const { data, error } = await supabase
+            .from('stocks')
+            .select('id,qty')
+            .eq('product', product)
+            .eq('account_type', account_type)
+            .eq('duration_code', duration_code)
+            .gt('qty', 0)
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          if (!data) throw new Error('No stock row to decrement');
+
+          const newQty = (Number(data.qty) || 0) - 1;
+          const { error: upErr } = await supabase
+            .from('stocks')
+            .update({ qty: newQty })
+            .eq('id', data.id);
+          if (upErr) throw upErr;
+
+          // Optional: write a record
+          await supabase.from('records').insert([{
+            product, account_type, duration_code,
+            admin_id: S.uid
+          }]);
+
+          done = true;
+        }
+
+        if (done) {
+          toast('Account released');
+          await refreshAdminArea();
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Get Account failed:\n' + (err?.message || err));
+      } finally {
+        setLoading(false);
       }
-
-      toast("Stock added");
-
-      // clear optional fields; keep product/type/duration
-      if ($qty)     $qty.value = "1";
-      if ($email)   $email.value = "";
-      if ($pass)    $pass.value = "";
-      if ($profile) $profile.value = "";
-      if ($pin)     $pin.value = "";
-      if ($notes)   $notes.value = "";
-
-      // refresh table if meron kang refresh button
-      document.getElementById("btnRefreshStocks")?.click();
-    } catch (err) {
-      console.error(err);
-      alert("Add stock failed");
-    } finally {
-      setLoading(false);
-      busy = false;
-    }
-  });
-}
+    });
+  }
   // ---------- Boot
   async function boot() {
     setLoading(true);
