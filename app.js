@@ -540,12 +540,14 @@
     }
 
     // Wire UI
-    // Wire UI
-wireLogin();
-wireTopNav();
-wireOwnerTabs();
-wireOwnerAddStock(); // <-- ADD THIS LINE
+    wireLogin();
+    wireTopNav();
+    wireOwnerTabs();
 
+    // NEW
+    wireOwnerAddStock();
+    wireAdminGetAccount();
+    await refreshAdminArea();
     setLoading(false);
     S.ready = true;
   }
