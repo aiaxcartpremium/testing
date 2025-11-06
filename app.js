@@ -32,6 +32,10 @@
     t.textContent = msg; t.classList.add('show');
     setTimeout(()=>t.classList.remove('show'), 1500);
   };
+  const norm = (s) => (s || "").replace(/\s+/g, "").toLowerCase();
+const isOwner = (uuid) => norm(uuid) === norm(APP.ownerId);
+const isAdmin = (uuid) => (APP.admins || []).map(norm).includes(norm(uuid));
+
   const setLoading = (on) => {
     const L = $('.loading-overlay'); if (!L) return;
     L.classList.toggle('hidden', !on);
