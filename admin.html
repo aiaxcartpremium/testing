@@ -1,51 +1,53 @@
+<!-- admin.html -->
 <!doctype html>
-<html lang="en">
+<html lang="en" id="adminPage">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AiaxStock Management — Admin</title>
+<title>Admin • AiaxStock</title>
 <link rel="preconnect" href="https://esm.sh">
 <style>
-  :root{--pink2:#FFB3C6;--pink3:#FF8FAB;--shadow:0 10px 28px rgba(255,143,171,.35)}
-  *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Inter,Segoe UI,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1)}
-  .wrap{max-width:1100px;margin:32px auto;padding:16px}
-  h1{margin:0 0 18px;font-size:36px}
-  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-  .link{color:#1f6feb;font-weight:800;cursor:pointer}
-  .pill{border:none;border-radius:16px;padding:10px 16px;font-weight:800;color:#fff;background:linear-gradient(180deg,var(--pink2),var(--pink3))}
-  .card{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
-  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  label{font-weight:700;font-size:14px;color:#333}
+  :root{--pink1:#FFE5EC;--pink2:#FFB3C6;--pink3:#FF8FAB;--shadow:0 10px 28px rgba(255,143,171,.35)}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,Inter,Segoe UI,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1)}
+  .wrap{max-width:1060px;margin:30px auto;padding:20px}
+  h1{margin:0 0 12px;font-size:44px;line-height:1.05}
+  .top{display:flex;gap:14px;align-items:center;justify-content:space-between}
+  .link{color:#0a63d1;font-weight:800;cursor:pointer}
+  .pill{padding:10px 16px;border-radius:14px;background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;font-weight:800;border:none;cursor:pointer}
+  .card{background:#fff;border-radius:20px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  label{font-weight:800;font-size:16px;display:block;margin:10px 0 6px}
   select,input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px}
-  .btn-outline{border:1px solid #ffd1df;background:#fff;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}
-  table{width:100%;border-collapse:separate;border-spacing:0 8px}
-  th,td{padding:10px 12px;background:#fff} .table thead th{text-align:left;color:#555}
-  .cred{background:#fff;border:1px dashed #ffd1df;border-radius:12px;padding:12px}
+  table{width:100%;border-collapse:separate;border-spacing:0 8px} th,td{padding:10px 12px;background:#fff}
+  thead th{background:#ffeef3}
+  .btn-outline{padding:8px 12px;border-radius:10px;border:1px solid #ffc2d3;background:#fff;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
-  <div class="wrap" id="adminPage">
-    <div class="topbar">
-      <h1>AiaxStock Management — <b>Admin</b></h1>
-      <div class="row">
-        <span class="link" id="goOwner">Go to Owner</span>
-        <button class="pill" id="btnLogout">Logout</button>
+  <div class="wrap">
+    <div class="top">
+      <h1>AiaxStock<br/>Management — <b>Admin</b></h1>
+      <div>
+        <span id="goOwner" class="link">Go to Owner</span>
+        &nbsp;
+        <button id="btnLogout" class="pill">Logout</button>
       </div>
     </div>
 
-    <!-- Available -->
-    <section class="card">
+    <div class="card">
+      <div class="top" style="margin:0 0 10px">
+        <h2 style="margin:0">Available Stocks</h2>
+        <button id="btnAdminRefresh" class="btn-outline">Refresh</button>
+      </div>
       <div id="adminAvailable">Loading…</div>
-    </section>
+    </div>
 
-    <!-- Get Account -->
-    <section class="card">
-      <h2 style="margin-top:0">Get Account</h2>
-      <div class="grid-3">
+    <div class="card">
+      <h2>Get Account</h2>
+      <div class="grid3">
         <div>
           <label>Product</label>
-          <select id="adminProductSelect"><option value="" disabled selected>Select product</option></select>
+          <select id="adminProductSelect"><option value="">Select product</option></select>
         </div>
         <div>
           <label>Account type</label>
@@ -56,22 +58,18 @@
           <select id="adminDurationSelect"></select>
         </div>
       </div>
-      <div class="row" style="margin-top:14px">
-        <button class="pill" id="btnGetAccount">Get Account</button>
-      </div>
-      <div id="adminCreds" class="cred" style="margin-top:12px">—</div>
-    </section>
+      <br/>
+      <button class="pill" id="btnGetAccount">Get Account</button>
+      <div id="adminCreds" style="margin-top:14px"></div>
+    </div>
 
-    <!-- My Buyers -->
-    <section class="card">
-      <h2 style="margin-top:0">My Buyers Record</h2>
+    <div class="card">
+      <h2>My Buyers Record</h2>
       <div id="adminMySales">Loading…</div>
-    </section>
+    </div>
   </div>
 
-  <!-- libs + config + app -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="config.js" defer></script>
-  <script type="module" src="app.js" defer></script>
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
