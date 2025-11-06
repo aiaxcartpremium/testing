@@ -1,92 +1,54 @@
-<!doctype html>
-<html lang="en">
-<head>
+<!doctype html><html><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Login • AiaxStock</title>
-<link rel="preconnect" href="https://esm.sh">
 <style>
-  :root{--pink1:#FFE5EC;--pink2:#FFB3C6;--pink3:#FF8FAB;--shadow:0 10px 28px rgba(255,143,171,.35)}
-  *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Inter,Arial;
-  background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1)}
-  .wrap{max-width:820px;margin:56px auto;padding:24px}
-  h1{margin:0 0 10px;font-size:48px} p{font-size:18px;color:#222;margin:0 0 20px}
-  .tile{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
-  .btn{width:100%;padding:18px 20px;font-weight:800;font-size:20px;border-radius:14px;
-       background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff;border:none;cursor:pointer}
-  .btn:active{transform:translateY(1px)}
-  .form{margin-top:14px;padding:14px;border:1px solid #ffd1df;border-radius:12px;background:#fff;display:none}
-  label{font-weight:700;font-size:14px} input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px;margin-top:6px}
-  .row{display:flex;gap:10px;margin-top:12px} .ghost{padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #ffd1df;font-weight:700;cursor:pointer}
-  .muted{color:#6b6b6b;font-size:14px;margin-top:8px}
+  :root{ --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
+  .wrap{max-width:720px;margin:48px auto;padding:20px}
+  h1{margin:0 0 14px;font-size:44px} p{margin:0 0 18px;font-size:18px}
+  .tile{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;margin:18px 0}
+  .title{font-weight:800;font-size:22px;margin-bottom:10px;padding:16px;border-radius:14px;color:#fff;
+         background:linear-gradient(180deg,var(--pink2),var(--pink3));text-align:center}
+  label{display:block;font-weight:700;font-size:14px;margin:10px 0 6px}
+  input{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .btn{flex:1;padding:16px;font-weight:800;border-radius:14px;border:none;cursor:pointer;color:#fff;
+       background:linear-gradient(180deg,var(--pink2),var(--pink3))}
 </style>
 </head>
 <body>
-  <div class="wrap" id="loginPage">
+  <div class="wrap">
     <h1>Login</h1>
     <p>Choose a role then type the <strong>UUID</strong> to continue (no magic link).</p>
 
-    <!-- OWNER first -->
     <div class="tile">
-      <button class="btn" id="btnOwner">Login as Owner</button>
-      <form class="form" id="formOwner" autocomplete="off">
-        <label for="ownerUUID">Owner UUID</label>
-        <input id="ownerUUID" placeholder="Type owner UUID" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-        <div class="row">
-          <button class="btn" type="submit" style="flex:1">Continue</button>
-          <button class="ghost" type="button" id="fillOwner">Use default</button>
-        </div>
-        <div class="muted">Only the UUIDs listed in <code>config.js</code> as owners will be accepted here.</div>
-      </form>
+      <div class="title">Login as Owner</div>
+      <label for="ownerUUID">Owner UUID</label>
+      <input id="ownerUUID" placeholder="type owner UUID here" autocomplete="off"/>
+      <div class="row"><button class="btn" id="ownerGo">Continue</button></div>
+      <div style="font-size:12px;color:#555;margin-top:6px">Only valid owner UUIDs are accepted.</div>
     </div>
 
-    <!-- ADMIN second (below owner) -->
     <div class="tile">
-      <button class="btn" id="btnAdmin">Login as Admin</button>
-      <form class="form" id="formAdmin" autocomplete="off">
-        <label for="adminUUID">Admin UUID</label>
-        <input id="adminUUID" placeholder="Type admin UUID" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-        <div class="row">
-          <button class="btn" type="submit" style="flex:1">Continue</button>
-          <button class="ghost" type="button" id="fillAdmin1">Fill Sample</button>
-        </div>
-        <div class="muted">Only the UUIDs listed in <code>config.js</code> as admins will be accepted here.</div>
-      </form>
+      <div class="title">Login as Admin</div>
+      <label for="adminUUID">Admin UUID</label>
+      <input id="adminUUID" placeholder="type admin UUID here" autocomplete="off"/>
+      <div class="row"><button class="btn" id="adminGo">Continue</button></div>
+      <div style="font-size:12px;color:#555;margin-top:6px">Only valid admin UUIDs are accepted.</div>
     </div>
   </div>
 
-  <!-- Order matters: config.js → app.js (module, defer) -->
-  <script src="config.js" defer></script>
-  <script type="module" src="app.js" defer></script>
-
-  <!-- Tiny starter that waits for app to be ready -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
   <script>
-    (function(){
-      const $ = s => document.querySelector(s);
-      function showForm(which){
-        $('#formOwner').style.display = which==='owner'?'block':'none';
-        $('#formAdmin').style.display = which==='admin'?'block':'none';
-      }
-      document.addEventListener('DOMContentLoaded', ()=>{
-        $('#btnOwner').onclick = ()=>{ showForm('owner'); $('#ownerUUID').focus(); };
-        $('#btnAdmin').onclick = ()=>{ showForm('admin'); $('#adminUUID').focus(); };
-
-        $('#fillOwner').onclick = ()=>{ if (window.APP_CFG?.OWNER_UUIDS?.[0]) $('#ownerUUID').value = window.APP_CFG.OWNER_UUIDS[0]; };
-        $('#fillAdmin1').onclick = ()=>{ if (window.APP_CFG?.ADMIN_UUIDS?.[0]) $('#adminUUID').value = window.APP_CFG.ADMIN_UUIDS[0]; };
-
-        $('#formOwner').onsubmit = (e)=>{ e.preventDefault(); waitApp(()=> window.__APP__.loginOwner($('#ownerUUID').value.trim())); };
-        $('#formAdmin').onsubmit = (e)=>{ e.preventDefault(); waitApp(()=> window.__APP__.loginAdmin($('#adminUUID').value.trim())); };
-      });
-
-      function waitApp(run){
-        // give the module a moment if it’s still parsing
-        if (window.__APP__ && typeof run === 'function') return run();
-        setTimeout(()=>{
-          if (window.__APP__) run();
-          else alert('App not loaded'); // only if truly not available
-        }, 30);
-      }
-    })();
+    // tiny glue for click -> app login
+    document.getElementById('ownerGo').onclick = () => {
+      window.__APP__?.loginWithUid('owner', document.getElementById('ownerUUID').value.trim());
+    };
+    document.getElementById('adminGo').onclick = () => {
+      window.__APP__?.loginWithUid('admin', document.getElementById('adminUUID').value.trim());
+    };
   </script>
-</body>
-</html>
+</body></html>
