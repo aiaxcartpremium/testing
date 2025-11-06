@@ -36,7 +36,38 @@
       <button id="admin-continue" class="btn btn-primary">Continue</button>
     </div>
 
-    <p class="palette">Palette • Lavender Blush • Pastel Pink • Light Pink • Pink Champagne</p>
+    <section id="viewLogin" class="container">
+  <h1>Login</h1>
+  <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
+
+  <div class="login-columns">
+    <!-- LEFT: Owner -->
+    <div class="login-card">
+      <button id="btnLoginOwner" class="btn btn-primary" type="button">Login as Owner</button>
+
+      <div id="ownerLoginCard" class="account-details hidden">
+        <label for="ownerUuid">Owner UUID</label>
+        <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off">
+        <div class="actions">
+          <button id="continueOwner" class="btn btn-secondary" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Admin -->
+    <div class="login-card">
+      <button id="btnLoginAdmin" class="btn btn-primary" type="button">Login as Admin</button>
+
+      <div id="adminLoginCard" class="account-details hidden">
+        <label for="adminUuid">Admin UUID</label>
+        <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off">
+        <div class="actions">
+          <button id="continueAdmin" class="btn btn-secondary" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
   </main>
 
   <!-- ===== Owner Panel ===== -->
