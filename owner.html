@@ -1,86 +1,123 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Owner • AiaxStock</title>
-<link rel="stylesheet" href="styles.css">
+<title>AiaxStock Management — Owner</title>
+<link rel="preconnect" href="https://esm.sh">
+<style>
+  :root{--pink1:#FFE5EC;--pink2:#FFB3C6;--pink3:#FF8FAB;--ink:#1f1531;--shadow:0 10px 28px rgba(255,143,171,.35)}
+  *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Inter,Segoe UI,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1)}
+  .wrap{max-width:1100px;margin:32px auto;padding:16px}
+  h1{margin:0 0 18px;font-size:36px;color:#1f1531}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .link{color:#1f6feb;font-weight:800;cursor:pointer} .btn{cursor:pointer}
+  .pill{border:none;border-radius:16px;padding:10px 16px;font-weight:800;color:#fff;background:linear-gradient(180deg,var(--pink2),var(--pink3))}
+  .tabs{display:flex;gap:12px;margin:12px 0 18px}
+  .tab{padding:12px 16px;border-radius:14px;background:#fff;box-shadow:var(--shadow);font-weight:800;cursor:pointer;user-select:none}
+  .tab.active{background:linear-gradient(180deg,var(--pink2),var(--pink3));color:#fff}
+  .card{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  label{font-weight:700;font-size:14px;color:#333}
+  select,input,textarea{width:100%;padding:12px;border:1px solid #e8d3db;border-radius:10px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .muted{color:#666;font-size:14px}
+  .btn-outline{border:1px solid #ffd1df;background:#fff;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}
+  table{width:100%;border-collapse:separate;border-spacing:0 8px}
+  th,td{padding:10px 12px;background:#fff} thead th{background:transparent}
+  .table thead th{color:#555;text-align:left}
+  .hide{display:none}
+</style>
 </head>
-<body data-page="owner">
-  <header class="topbar">
-    <h2>AiaxStock <span class="muted">Management — Owner</span></h2>
-    <nav>
-      <a id="goAdmin" class="link">Go to Admin</a>
-      <button id="btnLogout" class="ghost">Logout</button>
-    </nav>
-  </header>
+<body>
+  <div class="wrap" id="ownerPage">
+    <div class="topbar">
+      <h1>AiaxStock <br/>Management — <b>Owner</b></h1>
+      <div class="row">
+        <span class="link" id="goAdmin">Go to Admin</span>
+        <button class="pill" id="btnLogout">Logout</button>
+      </div>
+    </div>
 
-  <div class="tabs">
-    <button class="tab active" id="tabAdd">Add stock</button>
-    <button class="tab" id="tabStocks">Stocks</button>
-    <button class="tab" id="tabRecords">Records</button>
+    <div class="tabs">
+      <div class="tab active" id="tabAdd">Add stock</div>
+      <div class="tab" id="tabStocks">Stocks</div>
+      <div class="tab" id="tabRecords">Records</div>
+    </div>
+
+    <!-- Add Stock -->
+    <section class="card" id="paneAdd">
+      <h2 style="margin-top:0">Add Stock</h2>
+      <form id="addStockForm">
+        <div class="grid-3">
+          <div>
+            <label>Product</label>
+            <select id="productSelect"><option>Loading...</option></select>
+          </div>
+          <div>
+            <label>Account type</label>
+            <select id="typeSelect"></select>
+          </div>
+          <div>
+            <label>Duration</label>
+            <select id="durationSelect"></select>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-top:12px">
+          <div>
+            <label>Quantity</label>
+            <input id="qtyInput" type="number" value="1" min="1"/>
+          </div>
+          <div>
+            <label>Email (optional)</label>
+            <input id="emailInput" placeholder="login email"/>
+          </div>
+          <div>
+            <label>Password (optional)</label>
+            <input id="passInput" placeholder="login password"/>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-top:12px">
+          <div>
+            <label>Profile (optional)</label>
+            <input id="profileInput" placeholder="profile name"/>
+          </div>
+          <div>
+            <label>PIN (optional)</label>
+            <input id="pinInput" placeholder="profile PIN"/>
+          </div>
+          <div>
+            <label>Notes</label>
+            <input id="notesInput" placeholder="any notes"/>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:16px">
+          <button class="pill" type="submit">Add stock</button>
+          <span class="muted">RLS must allow owner insert on <code>stocks</code>.</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- Stocks -->
+    <section class="card hide" id="paneStocks">
+      <h2 style="margin-top:0">Stocks</h2>
+      <div id="ownerStocksTable">Loading…</div>
+    </section>
+
+    <!-- Records -->
+    <section class="card hide" id="paneRecords">
+      <h2 style="margin-top:0">Records</h2>
+      <div id="ownerRecords">Loading…</div>
+    </section>
   </div>
 
-  <!-- Add -->
-  <section id="paneAdd">
-    <h1>Add Stock</h1>
-
-    <form id="addStockForm" class="grid">
-      <label>Product
-        <select id="productSelect"><option>Loading…</option></select>
-      </label>
-
-      <label>Account type
-        <select id="typeSelect"></select>
-      </label>
-
-      <label>Duration
-        <select id="durationSelect"></select>
-      </label>
-
-      <label>Quantity
-        <input id="qtyInput" type="number" min="1" value="1"/>
-      </label>
-
-      <label>Email 
-        <input id="emailInput" type="text" placeholder="login email"/>
-      </label>
-
-      <label>Password 
-        <input id="passInput" type="text" placeholder="login password"/>
-      </label>
-
-      <label>Profile (optional)
-        <input id="profileInput" type="text" placeholder="profile name"/>
-      </label>
-
-      <label>PIN (optional)
-        <input id="pinInput" type="text" placeholder="profile pin"/>
-      </label>
-
-      <label class="full">Notes
-        <input id="notesInput" type="text" placeholder="any notes"/>
-      </label>
-
-      <div class="full right">
-        <button class="btn" type="submit">Add stock</button>
-      </div>
-    </form>
-  </section>
-
-  <!-- Stocks -->
-  <section id="paneStocks" style="display:none">
-    <h1>Stocks</h1>
-    <div id="ownerStocksTable"></div>
-  </section>
-
-  <!-- Records -->
-  <section id="paneRecords" style="display:none">
-    <h1>Records</h1>
-    <div id="ownerRecords"></div>
-  </section>
-
-  <script src="config.js"></script>
-  <script type="module" src="app.js"></script>
+  <!-- libs + config + app -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js" defer></script>
+  <script type="module" src="app.js" defer></script>
 </body>
 </html>
