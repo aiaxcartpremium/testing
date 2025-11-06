@@ -256,7 +256,93 @@
     $("#viewOwner")?.classList.add("hidden");
     $("#viewAdmin")?.classList.remove("hidden");
   }
+// ---------- Owner: Add Stock (form + submit)
+function wireOwnerAddStock() {
+  const btn = document.getElementById("btnAddStock");
+  if (!btn) return; // walang Add Stock button
 
+  // form fields (IDs dapat tugma sa HTML mo)
+  const $product = document.getElementById("productSelectOwner");
+  const $type    = document.getElementById("typeSelectOwner");
+  const $dur     = document.getElementById("durSelectOwner");
+  const $qty     = document.getElementById("qtyOwner");
+  const $email   = document.getElementById("emailOwner");
+  const $pass    = document.getElementById("passOwner");
+  const $profile = document.getElementById("profileOwner");
+  const $pin     = document.getElementById("pinOwner");
+  const $notes   = document.getElementById("notesOwner");
+
+  let busy = false;
+
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (busy) return;
+
+    // basic validations
+    const product       = ($product?.value || "").trim();
+    const account_type  = ($type?.value || "").trim();
+    const duration_code = ($dur?.value || "").trim();
+    const qty           = parseInt(($qty?.value || "1"), 10);
+
+    if (!product)       return toast("Pick a product");
+    if (!account_type)  return toast("Pick account type");
+    if (!duration_code) return toast("Pick duration");
+    if (!qty || qty < 1) return toast("Quantity must be ≥ 1");
+    if (!S.uid || S.role !== "owner") return alert("Owner session required.");
+
+    const payload = {
+      product,
+      account_type,
+      duration_code,
+      qty,
+      email:        ($email?.value || null) || null,
+      password:     ($pass?.value || null) || null,
+      profile_name: ($profile?.value || null) || null,
+      pin:          ($pin?.value || null) || null,
+      notes:        ($notes?.value || null) || null,
+      owner_uid:    S.uid
+    };
+
+    try {
+      busy = true;
+      setLoading(true);
+
+      // 1) Try RPC add_stock(payload)
+      let rpcError = null;
+      try {
+        const { error } = await supabase.rpc("add_stock", payload);
+        rpcError = error || null;
+      } catch (e) {
+        rpcError = e;
+      }
+
+      // 2) If walang RPC, direct insert sa 'stocks'
+      if (rpcError) {
+        const { error: e2 } = await supabase.from("stocks").insert([payload]);
+        if (e2) throw e2;
+      }
+
+      toast("Stock added");
+
+      // clear optional fields; keep product/type/duration
+      if ($qty)     $qty.value = "1";
+      if ($email)   $email.value = "";
+      if ($pass)    $pass.value = "";
+      if ($profile) $profile.value = "";
+      if ($pin)     $pin.value = "";
+      if ($notes)   $notes.value = "";
+
+      // refresh table if meron kang refresh button
+      document.getElementById("btnRefreshStocks")?.click();
+    } catch (err) {
+      console.error(err);
+      alert("Add stock failed");
+    } finally {
+      setLoading(false);
+      busy = false;
+    }
+  });
+}
   // ---------- Boot
   async function boot() {
     setLoading(true);
@@ -282,9 +368,11 @@
     }
 
     // Wire UI
-    wireLogin();
-    wireTopNav();
-    wireOwnerTabs();
+    // Wire UI
+wireLogin();
+wireTopNav();
+wireOwnerTabs();
+wireOwnerAddStock(); // <-- ADD THIS LINE
 
     setLoading(false);
     S.ready = true;
