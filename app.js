@@ -447,50 +447,57 @@ const isAdmin = (uuid) => (APP.admins || []).map(norm).includes(norm(uuid));
     await adminFillFormOptions();
     await adminRenderMySales();
   }
+  
+window.addEventListener("error", (e) => {
+  console.error(e.error || e.message);
+});
+ function wireLogin() {
+  const btnOwner = $("#btnLoginOwner");
+  const btnAdmin = $("#btnLoginAdmin");
 
-  // ─── LOGIN wiring ───────────────────────────────────────────────────────────
-  function wireLogin() {
-    const btnOwner = $('#btnLoginOwner');
-    const btnAdmin = $('#btnLoginAdmin');
-    const cardOwner= $('#ownerLoginCard');
-    const cardAdmin= $('#adminLoginCard');
-    const inputOwner = $('#ownerUuid');
-    const inputAdmin = $('#adminUuid');
-    const goOwner  = $('#continueOwner');
-    const goAdmin  = $('#continueAdmin');
+  const cardOwner = $("#ownerLoginCard");
+  const cardAdmin = $("#adminLoginCard");
 
-    btnOwner?.addEventListener('click', ()=>{
-      cardAdmin?.classList.add('hidden');
-      cardOwner?.classList.remove('hidden');
-      inputOwner?.focus();
-    });
-    btnAdmin?.addEventListener('click', ()=>{
-      cardOwner?.classList.add('hidden');
-      cardAdmin?.classList.remove('hidden');
-      inputAdmin?.focus();
-    });
+  const inputOwner = $("#ownerUuid");
+  const inputAdmin = $("#adminUuid");
 
-    goOwner?.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const id = (inputOwner?.value||'').trim();
-      if (!isOwner(id)) return alert('UUID is not an Owner ID.');
-      setSess('owner', id);
+  // show input cards when clicked
+  btnOwner?.addEventListener("click", () => {
+    cardAdmin?.classList.add("hidden");
+    cardOwner?.classList.remove("hidden");
+    inputOwner?.focus();
+  });
+
+  btnAdmin?.addEventListener("click", () => {
+    cardOwner?.classList.add("hidden");
+    cardAdmin?.classList.remove("hidden");
+    inputAdmin?.focus();
+  });
+
+  // Delegated handler so it still works if DOM is re-rendered
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("#continueOwner, #continueAdmin");
+    if (!t) return;
+    e.preventDefault(); // stop form submit / page reload
+
+    if (t.id === "continueOwner") {
+      const id = (inputOwner?.value || "").trim();
+      if (!isOwner(id)) return alert("UUID is not an Owner ID.");
+      sessionStorage.setItem("role", "owner");
+      sessionStorage.setItem("uid", id);
       showOwner();
-      // also prime owner data
-      ownerRenderStocks();
-      ownerRenderRecords();
-    });
+      return;
+    }
 
-    goAdmin?.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const id = (inputAdmin?.value||'').trim();
-      // owner can access admin; admin must be whitelisted
-      if (!(isOwner(id) || isAdmin(id))) return alert('UUID is not an Admin ID.');
-      setSess('admin', id);
+    if (t.id === "continueAdmin") {
+      const id = (inputAdmin?.value || "").trim();
+      if (!(isOwner(id) || isAdmin(id))) return alert("UUID is not an Admin ID.");
+      sessionStorage.setItem("role", "admin");
+      sessionStorage.setItem("uid", id);
       showAdmin();
-      adminRefreshAll();
-    });
-  }
+    }
+  });
+}
 
   // top nav: go to Admin/Owner (owner only), Logout
   function wireTopNav() {
