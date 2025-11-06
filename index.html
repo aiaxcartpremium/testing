@@ -1,126 +1,191 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Login • AiaxStock</title>
-<link rel="preconnect" href="https://esm.sh">
-<style>
-  :root{ --pink1:#FFE5EC; --pink2:#FFB3C6; --pink3:#FF8FAB; --shadow:0 10px 28px rgba(255,143,171,.35); }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,Segoe UI,Inter,Arial;background:linear-gradient(#ffe9f1,#ffdbe6,#ffe9f1);}
-  .wrap{max-width:760px;margin:56px auto;padding:24px}
-  h1{margin:0 0 12px;font-size:56px}
-  p{font-size:18px;margin:0 0 22px}
-  .btn{width:100%;padding:20px 22px;font-weight:800;font-size:20px;border-radius:16px;
-       background:linear-gradient(180deg,var(--pink2),var(--pink3)); color:#fff;border:none;cursor:pointer;box-shadow:var(--shadow)}
-  .btn:active{transform:translateY(1px)}
-  .sheet{background:#fff;border-radius:22px;box-shadow:var(--shadow);padding:22px;margin-top:16px}
-  .row{display:flex;gap:10px;margin-top:14px}
-  input{width:100%;padding:14px;border:1px solid #f1c9d6;border-radius:12px;font-size:16px}
-  .tight{max-width:560px}
-  .muted{opacity:.7}
-  .hide{display:none}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AiaxStock Management</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script defer src="app.js"></script>
 </head>
 <body>
-  <div class="wrap tight">
+
+  <!-- Toast / Loading (never blocks taps) -->
+  <div id="toast" class="toast hidden">Loading…</div>
+  <div id="overlay" class="loading-overlay hidden"></div>
+
+  <!-- ===== Login ===== -->
+  <main id="screen-login" class="container">
     <h1>Login</h1>
-    <p>Choose a role then <strong>type the UUID</strong> to continue (no magic link).</p>
+    <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
 
-    <button class="btn" id="openOwner">Login as Owner</button>
-    <div class="sheet hide" id="ownerForm">
-      <label>Owner UUID</label>
-      <input id="ownerUUID" placeholder="Type owner UUID" autocomplete="off" />
-      <div class="row"><button class="btn" id="ownerGo">Continue</button></div>
+    <button id="btn-owner" class="btn btn-primary">Login as Owner</button>
+
+    <div id="owner-box" class="login-card hidden">
+      <label for="owner-uuid">Owner UUID</label>
+      <input id="owner-uuid" type="text" inputmode="text" autocomplete="off" placeholder="paste owner UUID" />
+      <button id="owner-continue" class="btn btn-primary">Continue</button>
     </div>
 
-    <div style="height:14px"></div>
+    <button id="btn-admin" class="btn btn-primary">Login as Admin</button>
 
-    <button class="btn" id="openAdmin">Login as Admin</button>
-    <div class="sheet hide" id="adminForm">
-      <label>Admin UUID</label>
-      <input id="adminUUID" placeholder="Type admin UUID" autocomplete="off" />
-      <div class="row"><button class="btn" id="adminGo">Continue</button></div>
+    <div id="admin-box" class="login-card hidden">
+      <label for="admin-uuid">Admin UUID</label>
+      <input id="admin-uuid" type="text" inputmode="text" autocomplete="off" placeholder="paste admin UUID" />
+      <button id="admin-continue" class="btn btn-primary">Continue</button>
     </div>
 
-  <script src="https://esm.sh/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
-  <script src="app.js" type="module"></script>
-  <script>
-    // UI toggles
-    const $=s=>document.querySelector(s);
-    $('#openOwner').onclick=()=>{$('#ownerForm').classList.remove('hide');$('#adminForm').classList.add('hide');$('#ownerUUID').focus();}
-    $('#openAdmin').onclick=()=>{$('#adminForm').classList.remove('hide');$('#ownerForm').classList.add('hide');$('#adminUUID').focus();}
-    // submit
-    $('#ownerGo').onclick=()=>window.APP.login('owner',$('#ownerUUID').value.trim());
-    $('#adminGo').onclick=()=>window.APP.login('admin',$('#adminUUID').value.trim());
-  </script>
-  
-  <!-- put these at the very end of index.html, before </body> -->
-<script src="config.js"></script>
-<script src="https://esm.sh/@supabase/supabase-js@2"></script>
-<script>
-/* Minimal, non-module login logic — binds the buttons you have now */
+    <p class="palette">Palette • Lavender Blush • Pastel Pink • Light Pink • Pink Champagne</p>
+  </main>
 
-(function () {
-  // storage helpers
-  var SKEY = 'aiax.session';
-  function setSess(s){ localStorage.setItem(SKEY, JSON.stringify(s)); }
+  <!-- ===== Owner Panel ===== -->
+  <main id="screen-owner" class="container hidden">
+    <header class="topbar">
+      <h1>AiaxStock Management — <span class="role">Owner</span></h1>
+      <div class="toolbar">
+        <a id="link-admin" class="btn btn-ghost">Go to Admin</a>
+        <button id="btn-logout-o" class="btn btn-secondary">Logout</button>
+      </div>
+    </header>
 
-  // normalize arrays even if config.js failed to load
-  var OWNER_IDS = (window.OWNER_IDS||[]).map(x=>String(x).toLowerCase());
-  var ADMIN_IDS = (window.ADMIN_IDS||[]).map(x=>String(x).toLowerCase());
+    <nav class="tabs">
+      <button class="tab active" data-tab="owner-add">Add stock</button>
+      <button class="tab" data-tab="owner-stocks">Stocks</button>
+      <button class="tab" data-tab="owner-records">Records</button>
+    </nav>
 
-  function login(role, uuid){
-    uuid = (uuid||'').trim().toLowerCase();
-    if(!uuid){ alert('Please enter the UUID.'); return; }
+    <!-- Add Stock -->
+    <section id="owner-add" class="card">
+      <div class="grid-2">
+        <div>
+          <label>Product</label>
+          <select id="o-product"></select>
+        </div>
+        <div>
+          <label>Account type</label>
+          <select id="o-type"></select>
+        </div>
+        <div>
+          <label>Duration</label>
+          <select id="o-duration"></select>
+        </div>
+        <div>
+          <label>Quantity</label>
+          <input id="o-qty" type="number" min="1" value="1" />
+        </div>
+        <div>
+          <label>Email (optional)</label>
+          <input id="o-email" type="text" placeholder="login email" />
+        </div>
+        <div>
+          <label>Password (optional)</label>
+          <input id="o-pass" type="text" placeholder="login password" />
+        </div>
+        <div>
+          <label>Profile (optional)</label>
+          <input id="o-profile" type="text" placeholder="profile name" />
+        </div>
+        <div>
+          <label>PIN (optional)</label>
+          <input id="o-pin" type="text" placeholder="profile pin" />
+        </div>
+        <div class="full">
+          <label>Notes</label>
+          <input id="o-notes" type="text" placeholder="any notes" />
+        </div>
+      </div>
+      <div class="actions">
+        <button id="o-add-stock" class="btn btn-primary">Add stock</button>
+      </div>
+    </section>
 
-    if(role === 'owner'){
-      if(!OWNER_IDS.includes(uuid)){ alert('UUID is not an Owner ID.'); return; }
-      setSess({role:'owner', uuid: uuid});
-      location.href = 'owner.html';
-    }else{
-      if(!ADMIN_IDS.includes(uuid)){ alert('UUID is not an Admin ID.'); return; }
-      setSess({role:'admin', uuid: uuid});
-      location.href = 'admin.html';
-    }
-  }
+    <!-- Stocks -->
+    <section id="owner-stocks" class="card hidden">
+      <div class="table-wrap">
+        <table class="table" id="o-stocks-table">
+          <thead>
+            <tr>
+              <th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button id="o-refresh" class="btn btn-secondary">Refresh</button>
+      </div>
+    </section>
 
-  // expose (optional)
-  window.APP = { login: login };
+    <!-- Records (placeholder; CRUD batch comes next) -->
+    <section id="owner-records" class="card hidden">
+      <div class="table-wrap">
+        <table class="table" id="o-records-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 
-  // bind current buttons/fields by ID
-  document.addEventListener('DOMContentLoaded', function(){
-    var ownerBtn = document.getElementById('ownerGo');
-    var adminBtn = document.getElementById('adminGo');
-    var ownerInp = document.getElementById('ownerUUID');
-    var adminInp = document.getElementById('adminUUID');
-    var openOwner = document.getElementById('openOwner');
-    var openAdmin = document.getElementById('openAdmin');
-    var ownerForm = document.getElementById('ownerForm');
-    var adminForm = document.getElementById('adminForm');
+  <!-- ===== Admin Panel ===== -->
+  <main id="screen-admin" class="container hidden">
+    <header class="topbar">
+      <h1>AiaxStock Management — <span class="role">Admin</span></h1>
+      <div class="toolbar">
+        <a id="link-owner" class="btn btn-ghost">Go to Owner</a>
+        <button id="btn-logout-a" class="btn btn-secondary">Logout</button>
+      </div>
+    </header>
 
-    // guard in case some elements are missing
-    if(openOwner && ownerForm){ openOwner.onclick = function(){ ownerForm.classList.remove('hide'); if(adminForm) adminForm.classList.add('hide'); ownerInp && ownerInp.focus(); }; }
-    if(openAdmin && adminForm){ openAdmin.onclick = function(){ adminForm.classList.remove('hide'); if(ownerForm) ownerForm.classList.add('hide'); adminInp && adminInp.focus(); }; }
+    <section class="card">
+      <h2>Available Stocks</h2>
+      <div class="table-wrap">
+        <table class="table" id="a-stocks">
+          <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button id="a-refresh" class="btn btn-secondary">Refresh</button>
+      </div>
+    </section>
 
-    if(ownerBtn){ ownerBtn.onclick = function(){ login('owner', ownerInp && ownerInp.value); }; }
-    if(adminBtn){ adminBtn.onclick = function(){ login('admin', adminInp && adminInp.value); }; }
+    <section class="card">
+      <h2>Get Account</h2>
+      <div class="grid-3">
+        <div>
+          <label>Product</label>
+          <select id="a-product"></select>
+        </div>
+        <div>
+          <label>Account type</label>
+          <select id="a-type"></select>
+        </div>
+        <div>
+          <label>Duration</label>
+          <select id="a-duration"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="a-get" class="btn btn-primary">Get Account</button>
+      </div>
+      <div id="a-details" class="account-details hidden"></div>
+    </section>
 
-    // allow Enter key in input to submit
-    [ownerInp, adminInp].forEach(function(inp){
-      if(!inp) return;
-      inp.addEventListener('keydown', function(e){
-        if(e.key === 'Enter'){
-          e.preventDefault();
-          if(inp === ownerInp) login('owner', ownerInp.value);
-          else login('admin', adminInp.value);
-        }
-      });
-    });
-  });
-})();
-</script>
+    <section class="card">
+      <h2>My Buyers Record</h2>
+      <div class="table-wrap">
+        <table class="table" id="a-records">
+          <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </body>
 </html>
