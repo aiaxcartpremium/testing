@@ -1,298 +1,295 @@
 (() => {
-  let supabase, whoAmI = null; // user role + ID memory
+  // -------- Shortcuts & Globals
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // Shortcuts
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  // Guard: config present?
+  const APP = window.APP || {};
+  if (!APP.url || !APP.key) {
+    alert("App not loaded: missing config.js");
+    return;
+  }
 
-  const toast = (msg, ms = 1600) => {
-    const el = $('#toast');
+  // Supabase client
+  const supabase = window.supabase?.createClient(APP.url, APP.key);
+
+  // UI state (kept simple)
+  const S = {
+    role: null,     // "owner" | "admin"
+    uid: null,      // typed uuid
+    products: [],   // [{name:'Netflix'}] or strings
+    accountTypes: [],
+    durations: [],  // [['1 month','1m'], ...]
+    ready: false
+  };
+
+  // ---------- Helpers
+  const toast = (msg) => {
+    const t = $(".toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 1600);
+  };
+
+  const setLoading = (on) => {
+    const L = $(".loading-overlay");
+    if (!L) return;
+    L.classList.toggle("hidden", !on);
+    // Make sure it NEVER blocks clicks
+    L.style.pointerEvents = "none";
+  };
+
+  const fillSelect = (sel, items) => {
+    const el = $(sel);
     if (!el) return;
-    el.textContent = msg;
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), ms);
-  };
+    el.innerHTML = "";
+    for (const it of items) {
+      let label, value;
+      if (Array.isArray(it)) [label, value] = it;
+      else if (typeof it === "string") (label = value = it);
+      else if (it && it.name) (label = value = it.name);
+      else continue;
 
-  const show = (id) => $(id).classList.remove('hidden');
-  const hide = (id) => $(id).classList.add('hidden');
-
-  // Init Supabase
-  function initSupabase() {
-    const { url, key } = window.APP || {};
-    if (!url || !key) {
-      toast('Missing Supabase config');
-      return;
-    }
-    supabase = window.supabase.createClient(url, key, {
-      auth: { persistSession: false },
-    });
-  }
-
-  // -------- LOGIN BINDINGS -------- //
-  function bindLogin() {
-    $('#btnChooseOwner')?.addEventListener('click', () => {
-      $('#ownerBlock').classList.remove('hidden');
-      $('#adminBlock').classList.add('hidden');
-      $('#ownerInput').focus();
-    });
-
-    $('#btnChooseAdmin')?.addEventListener('click', () => {
-      $('#adminBlock').classList.remove('hidden');
-      $('#ownerBlock').classList.add('hidden');
-      $('#adminInput').focus();
-    });
-
-    $('#btnOwnerGo')?.addEventListener('click', () => {
-      const id = ($('#ownerInput').value || '').trim().toLowerCase();
-      if (id !== (window.APP.ownerId || '').toLowerCase())
-        return alert('UUID is not an Owner ID.');
-      whoAmI = { role: 'owner', id };
-      sessionStorage.setItem('role', 'owner');
-      sessionStorage.setItem('id', id);
-      enterOwner();
-    });
-
-    $('#btnAdminGo')?.addEventListener('click', () => {
-      const id = ($('#adminInput').value || '').trim().toLowerCase();
-      const ok = (window.APP.admins || [])
-        .map((x) => x.toLowerCase())
-        .includes(id);
-      if (!ok) return alert('UUID is not an Admin ID.');
-      whoAmI = { role: 'admin', id };
-      sessionStorage.setItem('role', 'admin');
-      sessionStorage.setItem('id', id);
-      enterAdmin();
-    });
-  }
-
-  function restoreSession() {
-    const role = sessionStorage.getItem('role');
-    const id = sessionStorage.getItem('id');
-    if (role && id) {
-      whoAmI = { role, id };
-      if (role === 'owner') enterOwner();
-      else enterAdmin();
-    }
-  }
-
-  // -------- OWNER PANEL -------- //
-  async function enterOwner() {
-    hide('#login');
-    show('#ownerPanel');
-    hide('#adminPanel');
-
-    $('#logoutOwner').onclick = doLogout;
-    $('#goAdmin').onclick = () => enterAdmin();
-
-    $$('.tabs').forEach((t) => t.addEventListener('click', switchTab));
-    $('#oaAddBtn').onclick = addStock;
-
-    await loadSelects();
-    await refreshOwnerStocks();
-    await refreshOwnerRecords();
-  }
-
-  // -------- ADMIN PANEL -------- //
-  async function enterAdmin() {
-    hide('#login');
-    hide('#ownerPanel');
-    show('#adminPanel');
-    $('#logoutAdmin').onclick = doLogout;
-    $('#goOwner').onclick = () => enterOwner();
-    await loadSelects(); // share same select list
-    toast('Logged in as Admin');
-  }
-
-  function doLogout() {
-    sessionStorage.clear();
-    whoAmI = null;
-    show('#login');
-    hide('#ownerPanel');
-    hide('#adminPanel');
-    $('#ownerBlock').classList.add('hidden');
-    $('#adminBlock').classList.add('hidden');
-    $('#ownerInput').value = '';
-    $('#adminInput').value = '';
-  }
-
-  // -------- TABS -------- //
-  function switchTab(evt) {
-    const btn = evt.target.closest('.tab');
-    if (!btn) return;
-    const name = btn.dataset.tab;
-    $$('.tab').forEach((b) => b.classList.toggle('active', b === btn));
-    ['ownerAdd', 'ownerStocks', 'ownerRecords'].forEach((id) => {
-      const el = $('#' + id);
-      if (el) el.classList.toggle('hidden', id !== name);
-    });
-  }
-
-  // -------- SELECT LOADER -------- //
-  async function loadSelects() {
-    await loadProductOptions();
-
-    const typeSel = $('#oaType');
-    const durSel = $('#oaDuration');
-
-    fillSelect(
-      typeSel,
-      (window.APP.ACCOUNT_TYPES || []).map((t) => [t, t])
-    );
-    fillSelect(durSel, window.APP.DURATIONS || []);
-  }
-
-  async function loadProductOptions() {
-    const prodSel1 = $('#oaProduct');
-    const prodSel2 = $('#getProduct');
-    const allProdSelects = [prodSel1, prodSel2].filter(Boolean);
-
-    allProdSelects.forEach((s) => {
-      s.innerHTML = '<option>Loading...</option>';
-    });
-
-    let options = [];
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 4000); // 4s timeout
-      const { data, error } = await supabase
-        .from('product_options')
-        .select('product')
-        .order('product', { ascending: true })
-        .abortSignal(ctrl.signal);
-      clearTimeout(timer);
-
-      if (error) console.warn('product_options error:', error);
-      if (data && data.length) options = data.map((r) => r.product);
-    } catch (e) {
-      console.warn('product_options timeout/fail:', e);
-    }
-
-    if (!options.length && Array.isArray(window.APP.PRODUCTS)) {
-      options = [...window.APP.PRODUCTS].sort((a, b) =>
-        a.localeCompare(b)
-      );
-    }
-
-    allProdSelects.forEach((sel) => fillSelect(sel, options.map((o) => [o, o])));
-  }
-
-  function fillSelect(sel, pairs) {
-    if (!sel) return;
-    sel.innerHTML = '';
-    for (const pair of pairs) {
-      const [label, value] = Array.isArray(pair) ? pair : [pair, pair];
-      const opt = document.createElement('option');
-      opt.textContent = label;
+      const opt = document.createElement("option");
       opt.value = value;
-      sel.appendChild(opt);
+      opt.textContent = label;
+      el.appendChild(opt);
     }
-  }
-
-  // -------- OWNER ACTIONS -------- //
-  async function addStock() {
-    try {
-      const payload = {
-        product: $('#oaProduct').value,
-        account_type: $('#oaType').value,
-        duration_code: $('#oaDuration').value,
-        qty: Math.max(1, parseInt($('#oaQty').value || '1', 10)),
-        email: $('#oaEmail').value || null,
-        password: $('#oaPass').value || null,
-        profile_name: $('#oaProfile').value || null,
-        pin: $('#oaPin').value || null,
-        notes: $('#oaNotes').value || null,
-        owner_id: window.APP.ownerId,
-      };
-
-      const { error } = await supabase.rpc('add_stock_bulk', payload);
-      if (error) throw error;
-
-      toast('Stock added!');
-      $('#oaQty').value = '1';
-      await refreshOwnerStocks();
-    } catch (e) {
-      console.error(e);
-      alert('Add stock failed — check console / Supabase.');
-    }
-  }
-
-  async function refreshOwnerStocks() {
-    const tbody = $('#ownerStocksTable tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    try {
-      const { data, error } = await supabase
-        .from('stocks_summary')
-        .select('*')
-        .order('product');
-      if (error) throw error;
-
-      (data || []).forEach((row) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.product || ''}</td>
-          <td>${row.account_type || ''}</td>
-          <td>${row.duration_label || row.duration_code || ''}</td>
-          <td>${row.qty || 0}</td>
-          <td>
-            <button class="btn btn-secondary btn-sm" disabled>Edit</button>
-            <button class="btn btn-ghost btn-sm" disabled>Remove</button>
-          </td>`;
-        tbody.appendChild(tr);
-      });
-    } catch (e) {
-      console.error('refreshOwnerStocks:', e);
-    }
-  }
-
-  async function refreshOwnerRecords() {
-    const tbody = $('#ownerRecordsTable tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    try {
-      const { data, error } = await supabase
-        .from('sales')
-        .select(
-          'id,product,account_type,created_at,expires_at,admin_id,warranty,voided'
-        )
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-
-      (data || []).forEach((r) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r.id}</td>
-          <td>${r.product || ''}</td>
-          <td>${r.account_type || ''}</td>
-          <td>${fmtDT(r.created_at)}</td>
-          <td>${fmtDT(r.expires_at)}</td>
-          <td>${r.admin_id || '-'}</td>
-          <td>${r.warranty ? '✓' : ''}</td>
-          <td>${r.voided ? '✓' : ''}</td>
-          <td><button class="btn btn-secondary btn-sm" disabled>Edit</button></td>`;
-        tbody.appendChild(tr);
-      });
-    } catch (e) {
-      console.error('refreshOwnerRecords:', e);
-    }
-  }
-
-  const fmtDT = (s) => {
-    if (!s) return '';
-    const d = new Date(s);
-    return d.toLocaleString();
   };
 
-  // -------- STARTUP -------- //
-  window.addEventListener('DOMContentLoaded', async () => {
+  const isOwner = (uuid) =>
+    (uuid || "").toLowerCase() === (APP.ownerId || "").toLowerCase();
+
+  const isAdmin = (uuid) =>
+    (APP.admins || []).map(a => a.toLowerCase())
+      .includes((uuid || "").toLowerCase());
+
+  // ---------- Data fetch with fallbacks
+  async function loadProducts() {
+    // Try DB first
     try {
-      initSupabase();
-      bindLogin();
-      restoreSession();
+      if (!supabase) throw new Error("no supabase");
+      const { data, error } = await supabase.from("products")
+        .select("name").order("name");
+      if (error) throw error;
+      if (data?.length) return data.map(r => r.name);
     } catch (e) {
-      console.error('App startup failed:', e);
-      toast('App failed to start.');
+      // fallback to config
+      if (APP.PRODUCTS?.length) return APP.PRODUCTS;
     }
-  });
+    return [];
+  }
+
+  async function loadAccountTypes() {
+    try {
+      if (!supabase) throw new Error("no supabase");
+      const { data, error } = await supabase.from("account_types")
+        .select("label").order("label");
+      if (error) throw error;
+      if (data?.length) return data.map(r => r.label);
+    } catch (e) {
+      if (APP.ACCOUNT_TYPES?.length) return APP.ACCOUNT_TYPES;
+    }
+    return [];
+  }
+
+  async function loadDurations() {
+    try {
+      if (!supabase) throw new Error("no supabase");
+      const { data, error } = await supabase.from("durations")
+        .select("label, code").order("seq", { ascending: true });
+      if (error) throw error;
+      if (data?.length) return data.map(r => [r.label, r.code]);
+    } catch (e) {
+      if (APP.DURATIONS?.length) return APP.DURATIONS;
+    }
+    return [];
+  }
+
+  async function primeOptions() {
+    // Populate selects quickly with fallbacks, then replace when DB returns
+    // 1) immediate placeholders
+    fillSelect("#productSelectOwner", [["Loading…", ""]]);
+    fillSelect("#productSelectAdmin", [["Loading…", ""]]);
+
+    fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
+    fillSelect("#typeSelectAdmin", APP.ACCOUNT_TYPES || []);
+
+    fillSelect("#durSelectOwner", APP.DURATIONS || []);
+    fillSelect("#durSelectAdmin", APP.DURATIONS || []);
+
+    // 2) fetch real data
+    const [prods, types, durs] = await Promise.all([
+      loadProducts(), loadAccountTypes(), loadDurations()
+    ]);
+
+    if (prods.length) {
+      S.products = prods;
+      fillSelect("#productSelectOwner", prods);
+      fillSelect("#productSelectAdmin", prods);
+    }
+    if (types.length) {
+      S.accountTypes = types;
+      fillSelect("#typeSelectOwner", types);
+      fillSelect("#typeSelectAdmin", types);
+    }
+    if (durs.length) {
+      S.durations = durs;
+      fillSelect("#durSelectOwner", durs);
+      fillSelect("#durSelectAdmin", durs);
+    }
+  }
+
+  // ---------- Login wiring
+  function wireLogin() {
+    // Buttons
+    const btnOwner = $("#btnLoginOwner");
+    const btnAdmin = $("#btnLoginAdmin");
+
+    const cardOwner = $("#ownerLoginCard");
+    const cardAdmin = $("#adminLoginCard");
+
+    const inputOwner = $("#ownerUuid");
+    const inputAdmin = $("#adminUuid");
+
+    const goOwner = $("#continueOwner");
+    const goAdmin = $("#continueAdmin");
+
+    // show input cards when clicked
+    btnOwner?.addEventListener("click", () => {
+      cardAdmin?.classList.add("hidden");
+      cardOwner?.classList.remove("hidden");
+      inputOwner?.focus();
+    });
+
+    btnAdmin?.addEventListener("click", () => {
+      cardOwner?.classList.add("hidden");
+      cardAdmin?.classList.remove("hidden");
+      inputAdmin?.focus();
+    });
+
+    goOwner?.addEventListener("click", () => {
+      const id = (inputOwner?.value || "").trim();
+      if (!isOwner(id)) {
+        alert("UUID is not an Owner ID.");
+        return;
+      }
+      S.role = "owner";
+      S.uid = id;
+      sessionStorage.setItem("role", S.role);
+      sessionStorage.setItem("uid", S.uid);
+      showOwner();
+    });
+
+    goAdmin?.addEventListener("click", () => {
+      const id = (inputAdmin?.value || "").trim();
+      // Owner can access Admin too; Admin must be whitelisted
+      if (!(isOwner(id) || isAdmin(id))) {
+        alert("UUID is not an Admin ID.");
+        return;
+      }
+      S.role = "admin";
+      S.uid = id;
+      sessionStorage.setItem("role", S.role);
+      sessionStorage.setItem("uid", S.uid);
+      showAdmin();
+    });
+  }
+
+  // ---------- Top nav (Go to Admin / Go to Owner / Logout)
+  function wireTopNav() {
+    $("#goToAdmin")?.addEventListener("click", () => {
+      // Only owners can jump; admins stay admin
+      if (S.role === "owner") showAdmin();
+    });
+    $("#goToOwner")?.addEventListener("click", () => {
+      // Owner always allowed, admin cannot
+      if (S.role === "owner") showOwner();
+    });
+    $$(".btnLogout").forEach(b => b.addEventListener("click", () => {
+      S.role = null; S.uid = null;
+      sessionStorage.removeItem("role");
+      sessionStorage.removeItem("uid");
+      showLogin();
+    }));
+  }
+
+  // ---------- Tabs (Owner page buttons)
+  function wireOwnerTabs() {
+    const tabs = $$(".tab");
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      const target = t.dataset.target;
+      $$(".tab-page").forEach(p => p.classList.add("hidden"));
+      $(`#${target}`)?.classList.remove("hidden");
+    }));
+  }
+
+  // ---------- Views
+  function showLogin() {
+    $("#viewLogin")?.classList.remove("hidden");
+    $("#viewOwner")?.classList.add("hidden");
+    $("#viewAdmin")?.classList.add("hidden");
+
+    // Reset login cards to collapsed
+    $("#ownerLoginCard")?.classList.add("hidden");
+    $("#adminLoginCard")?.classList.add("hidden");
+  }
+
+  function showOwner() {
+    $("#viewLogin")?.classList.add("hidden");
+    $("#viewAdmin")?.classList.add("hidden");
+    $("#viewOwner")?.classList.remove("hidden");
+
+    // default tab
+    const firstTab = $(".tab");
+    if (firstTab && !firstTab.classList.contains("active")) {
+      firstTab.click();
+    }
+  }
+
+  function showAdmin() {
+    $("#viewLogin")?.classList.add("hidden");
+    $("#viewOwner")?.classList.add("hidden");
+    $("#viewAdmin")?.classList.remove("hidden");
+  }
+
+  // ---------- Boot
+  async function boot() {
+    setLoading(true);
+
+    // Never let the loading overlay block clicks
+    const overlay = $(".loading-overlay");
+    if (overlay) overlay.style.pointerEvents = "none";
+
+    // Populate selects quickly then hydrate
+    await primeOptions();
+
+    // Restore session role if present
+    const savedRole = sessionStorage.getItem("role");
+    const savedUid = sessionStorage.getItem("uid");
+
+    if (savedRole && savedUid) {
+      S.role = savedRole;
+      S.uid = savedUid;
+      if (S.role === "owner") showOwner();
+      else showAdmin();
+    } else {
+      showLogin();
+    }
+
+    // Wire UI
+    wireLogin();
+    wireTopNav();
+    wireOwnerTabs();
+
+    setLoading(false);
+    S.ready = true;
+  }
+
+  // Start
+  window.addEventListener("DOMContentLoaded", boot);
 })();
