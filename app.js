@@ -32,10 +32,20 @@
     t.classList.add("show");
     setTimeout(() => t.classList.remove("show"), 1600);
   };
-  // ---- surface JS errors (helps on mobile)
+  // ---- show JS errors so we can see them on mobile
 window.onerror = (msg, src, line, col, err) => {
   alert('JS error: ' + msg + '\n@' + (src||'') + ':' + line);
 };
+
+// Force button type to "button" so clicks don't reload the page
+function ensureButtons() {
+  ['#btnAddStock', '#btnGetAccount', '#continueOwner', '#continueAdmin']
+    .forEach(sel => {
+      const b = document.querySelector(sel);
+      if (b) b.setAttribute('type', 'button');
+    });
+}
+  
 
   const setLoading = (on) => {
     const L = $(".loading-overlay");
@@ -367,148 +377,176 @@ window.onerror = (msg, src, line, col, err) => {
     filterAdminSelectorsFromStock();
   }
 
-  // ---- OWNER: Add Stock (delegated click)
+// OWNER: Add Stock (direct + delegated)
 function wireOwnerAddStock() {
-  document.addEventListener('click', async (e) => {
-    const t = e.target;
-    if (!t.closest) return;
-    if (!t.closest('#btnAddStock')) return;   // works even if wrapped/div-ed
-
-    const product       = (document.querySelector('#productSelectOwner')?.value || '').trim();
-    const account_type  = (document.querySelector('#typeSelectOwner')?.value || '').trim();
-    const duration_code = (document.querySelector('#durSelectOwner')?.value || '').trim();
-    const qty           = Number(document.querySelector('#qtyInputOwner')?.value || '0');
-
-    const email         = document.querySelector('#emailInputOwner')?.value || null;
-    const password      = document.querySelector('#passInputOwner')?.value || null;
-    const profile_name  = document.querySelector('#profileInputOwner')?.value || null;
-    const pin           = document.querySelector('#pinInputOwner')?.value || null;
-    const notes         = document.querySelector('#notesInputOwner')?.value || null;
-
-    if (!product || !account_type || !duration_code || !qty || qty < 1) {
-      toast('Fill product, type, duration, and quantity ≥ 1');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // try RPC first
-      try {
-        const { error } = await supabase.rpc('add_stock', {
-          p_product: product,
-          p_type: account_type,
-          p_duration_code: duration_code,
-          p_qty: qty,
-          p_email: email,
-          p_password: password,
-          p_profile: profile_name,
-          p_pin: pin,
-          p_notes: notes,
-          p_owner: S.uid
-        });
-        if (error) throw error;
-      } catch {
-        // fallback: direct insert
-        const { error } = await supabase.from('stocks').insert([{
-          product, account_type, duration_code, qty,
-          email, password, profile_name, pin, notes,
-          created_by: S.uid
-        }]);
-        if (error) throw error;
-      }
-
-      toast('Stock added');
-      document.querySelector('#qtyInputOwner').value = '1';
-      ['#emailInputOwner','#passInputOwner','#profileInputOwner','#pinInputOwner','#notesInputOwner']
-        .forEach(sel => { const el = document.querySelector(sel); if (el) el.value = ''; });
-      await refreshAdminArea();
-    } catch (err) {
-      alert('Add stock failed:\n' + (err?.message || err));
-    } finally {
-      setLoading(false);
-    }
+  // direct
+  const direct = document.querySelector('#btnAddStock');
+  if (direct) {
+    direct.setAttribute('type', 'button');
+    direct.addEventListener('click', (e) => handleOwnerAddStock(e));
+  }
+  // delegated backup
+  document.addEventListener('click', (e) => {
+    const t = e.target?.closest?.('#btnAddStock');
+    if (!t) return;
+    handleOwnerAddStock(e);
   });
 }
 
-// ---- ADMIN: Get Account (delegated click)
-function wireAdminGetAccount() {
-  document.addEventListener('click', async (e) => {
-    const t = e.target;
-    if (!t.closest || !t.closest('#btnGetAccount')) return;
+async function handleOwnerAddStock(e) {
+  e?.preventDefault?.(); e?.stopPropagation?.();
 
-    const product       = (document.querySelector('#productSelectAdmin')?.value || '').trim();
-    const account_type  = (document.querySelector('#typeSelectAdmin')?.value || '').trim();
-    const duration_code = (document.querySelector('#durSelectAdmin')?.value || '').trim();
+  const product       = (document.querySelector('#productSelectOwner')?.value || '').trim();
+  const account_type  = (document.querySelector('#typeSelectOwner')?.value || '').trim();
+  const duration_code = (document.querySelector('#durSelectOwner')?.value || '').trim();
+  const qty           = Number(document.querySelector('#qtyInputOwner')?.value || '0');
 
-    if (!product || !account_type || !duration_code) {
-      toast('Pick product, type and duration');
-      return;
-    }
+  const email         = document.querySelector('#emailInputOwner')?.value || null;
+  const password      = document.querySelector('#passInputOwner')?.value || null;
+  const profile_name  = document.querySelector('#profileInputOwner')?.value || null;
+  const pin           = document.querySelector('#pinInputOwner')?.value || null;
+  const notes         = document.querySelector('#notesInputOwner')?.value || null;
 
-    const found = STOCK_CACHE.find(r =>
-      r.product === product && r.account_type === account_type &&
-      r.duration_code === duration_code && r.qty > 0
-    );
-    if (!found) { toast('Out of stock'); return; }
+  if (!product || !account_type || !duration_code || !qty || qty < 1) {
+    toast('Fill product, type, duration, and quantity ≥ 1');
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
+  try {
+    // Try RPC first
+    let triedRpc = false;
     try {
-      // secure path: RPC
-      try {
-        const { error } = await supabase.rpc('get_account_and_record_sale', {
-          p_product: product,
-          p_type: account_type,
-          p_duration_code: duration_code,
-          p_admin: S.uid
-        });
-        if (error) throw error;
-      } catch {
-        // fallback: decrement one row + write record
-        const { data, error } = await supabase
-          .from('stocks')
-          .select('id,qty')
-          .eq('product', product)
-          .eq('account_type', account_type)
-          .eq('duration_code', duration_code)
-          .gt('qty', 0)
-          .limit(1)
-          .maybeSingle();
-        if (error) throw error;
-        if (!data) throw new Error('No stock row to decrement');
-
-        const newQty = (Number(data.qty) || 0) - 1;
-        const { error: upErr } = await supabase
-          .from('stocks')
-          .update({ qty: newQty })
-          .eq('id', data.id);
-        if (upErr) throw upErr;
-
-        await supabase.from('records').insert([{
-          product, account_type, duration_code,
-          admin_id: S.uid
-        }]);
-      }
-
-      toast('Account released');
-      await refreshAdminArea();
-    } catch (err) {
-      alert('Get Account failed:\n' + (err?.message || err));
-    } finally {
-      setLoading(false);
+      triedRpc = true;
+      const { error } = await supabase.rpc('add_stock', {
+        p_product: product,
+        p_type: account_type,
+        p_duration_code: duration_code,
+        p_qty: qty,
+        p_email: email,
+        p_password: password,
+        p_profile: profile_name,
+        p_pin: pin,
+        p_notes: notes,
+        p_owner: S.uid
+      });
+      if (error) throw error;
+    } catch (rpcErr) {
+      // Fallback: plain insert
+      const { error } = await supabase.from('stocks').insert([{
+        product, account_type, duration_code, qty,
+        email, password, profile_name, pin, notes,
+        created_by: S.uid
+      }]);
+      if (error) throw error;
     }
+
+    toast('Stock added');
+    // clear light fields
+    const q = document.querySelector('#qtyInputOwner');
+    if (q) q.value = '1';
+    ['#emailInputOwner','#passInputOwner','#profileInputOwner','#pinInputOwner','#notesInputOwner']
+      .forEach(sel => { const el = document.querySelector(sel); if (el) el.value = ''; });
+
+    await refreshAdminArea?.();
+  } catch (err) {
+    alert('Add stock failed:\n' + (err?.message || err));
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ADMIN: Get Account (direct + delegated)
+function wireAdminGetAccount() {
+  // direct
+  const direct = document.querySelector('#btnGetAccount');
+  if (direct) {
+    direct.setAttribute('type', 'button');
+    direct.addEventListener('click', (e) => handleAdminGetAccount(e));
+  }
+  // delegated backup
+  document.addEventListener('click', (e) => {
+    const t = e.target?.closest?.('#btnGetAccount');
+    if (!t) return;
+    handleAdminGetAccount(e);
   });
+}
+
+let STOCK_CACHE = []; // make sure this exists globally
+
+async function handleAdminGetAccount(e) {
+  e?.preventDefault?.(); e?.stopPropagation?.();
+
+  const product       = (document.querySelector('#productSelectAdmin')?.value || '').trim();
+  const account_type  = (document.querySelector('#typeSelectAdmin')?.value || '').trim();
+  const duration_code = (document.querySelector('#durSelectAdmin')?.value || '').trim();
+
+  if (!product || !account_type || !duration_code) {
+    toast('Pick product, type and duration');
+    return;
+  }
+
+  // only allow combinations that exist with qty>0
+  const ok = STOCK_CACHE.some(r =>
+    r.product === product &&
+    r.account_type === account_type &&
+    r.duration_code === duration_code &&
+    Number(r.qty) > 0
+  );
+  if (!ok) { toast('Out of stock for that combo'); return; }
+
+  setLoading(true);
+  try {
+    // Preferred: secure RPC
+    let rpcTried = false;
+    try {
+      rpcTried = true;
+      const { error } = await supabase.rpc('get_account_and_record_sale', {
+        p_product: product,
+        p_type: account_type,
+        p_duration_code: duration_code,
+        p_admin: S.uid
+      });
+      if (error) throw error;
+    } catch (rpcErr) {
+      // Fallback: find a row, decrement qty, write a record
+      const { data, error } = await supabase
+        .from('stocks')
+        .select('id,qty')
+        .eq('product', product)
+        .eq('account_type', account_type)
+        .eq('duration_code', duration_code)
+        .gt('qty', 0)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('No stock row to decrement');
+
+      const newQty = (Number(data.qty) || 0) - 1;
+      const { error: upErr } = await supabase.from('stocks').update({ qty: newQty }).eq('id', data.id);
+      if (upErr) throw upErr;
+
+      const { error: recErr } = await supabase.from('records').insert([{
+        product, account_type, duration_code, admin_id: S.uid
+      }]);
+      if (recErr) throw recErr;
+    }
+
+    toast('Account released');
+    await refreshAdminArea?.();
+  } catch (err) {
+    alert('Get Account failed:\n' + (err?.message || err));
+  } finally {
+    setLoading(false);
+  }
 }
   // ---------- Boot
   async function boot() {
     setLoading(true);
-
+    ensureButtons();            // <— add this
+  await primeOptions();
     // Never let the loading overlay block clicks
-    const overlay = $(".loading-overlay");
-    if (overlay) overlay.style.pointerEvents = "none";
-
-    // Populate selects quickly then hydrate
-    await primeOptions();
-
+    
     // Restore session role if present
     const savedRole = sessionStorage.getItem("role");
     const savedUid = sessionStorage.getItem("uid");
@@ -524,17 +562,16 @@ function wireAdminGetAccount() {
 
     // Wire UI
         // Wire UI
-    wireLogin();
-    wireTopNav();
-    wireOwnerTabs();
-
-    // NEW
-    wireOwnerAddStock();
-    wireAdminGetAccount();
-    await refreshAdminArea();
-    setLoading(false);
-    S.ready = true;
-  }
+    
+ wireLogin();
+  wireTopNav();
+  wireOwnerTabs();
+  wireOwnerAddStock();        // <— add this
+  wireAdminGetAccount();      // <— and this
+  await refreshAdminArea?.();
+  setLoading(false);
+  S.ready = true;
+}
 
   // Start
   window.addEventListener("DOMContentLoaded", boot);
