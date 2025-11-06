@@ -1,412 +1,298 @@
 (() => {
-  const { createClient } = supabase;
-  const APP = window.APP;
+  let supabase, whoAmI = null; // user role + ID memory
 
-  // --- Supabase client
-  const sb = createClient(APP.url, APP.key);
+  // Shortcuts
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // --- State
-  const S = {
-    role: null,         // "owner" | "admin"
-    uid: null,          // current user's UUID
-    products: [],       // [{name: 'Netflix'}, ...]
+  const toast = (msg, ms = 1600) => {
+    const el = $('#toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), ms);
   };
 
-  // ========== helpers ==========
-  const $ = (q) => document.querySelector(q);
-  const $all = (q) => [...document.querySelectorAll(q)];
-  const show = (el) => el.classList.remove('hidden');
-  const hide = (el) => el.classList.add('hidden');
-  const toast = (msg, ms=1600) => {
-    const t = $('#toast');
-    t.textContent = msg;
-    show(t);
-    setTimeout(()=>hide(t), ms);
-  };
-  const setOverlay = (on) => {
-    const ov = $('#overlay');
-    on ? show(ov) : hide(ov);
-  };
+  const show = (id) => $(id).classList.remove('hidden');
+  const hide = (id) => $(id).classList.add('hidden');
 
-  // Persist session
-  const saveSession = () => localStorage.setItem('aiax_session', JSON.stringify({role:S.role, uid:S.uid}));
-  const loadSession = () => {
-    try {
-      const raw = localStorage.getItem('aiax_session');
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (!data || !data.uid || !data.role) return null;
-      return data;
-    } catch { return null; }
-  };
-  const clearSession = () => localStorage.removeItem('aiax_session');
-
-  // ========== Login UI ==========
-  const bindLogin = () => {
-    $('#btn-owner').addEventListener('click', () => {
-      hide($('#admin-box'));
-      show($('#owner-box'));
-      $('#owner-uuid').focus();
-    });
-
-    $('#btn-admin').addEventListener('click', () => {
-      hide($('#owner-box'));
-      show($('#admin-box'));
-      $('#admin-uuid').focus();
-    });
-
-    $('#owner-continue').addEventListener('click', () => {
-      const id = ($('#owner-uuid').value||'').trim().toLowerCase();
-      if (id !== (APP.ownerId||'').toLowerCase()) {
-        alert('UUID is not an Owner ID.');
-        return;
-      }
-      S.role = 'owner';
-      S.uid = id;
-      saveSession();
-      route('owner');
-    });
-
-    $('#admin-continue').addEventListener('click', () => {
-      const id = ($('#admin-uuid').value||'').trim().toLowerCase();
-      const ok = (APP.admins||[]).map(x=>x.toLowerCase()).includes(id);
-      if (!ok) {
-        alert('UUID is not an Admin ID.');
-        return;
-      }
-      S.role = 'admin';
-      S.uid = id;
-      saveSession();
-      route('admin');
-    });
-  };
-
-  // ========== Routing ==========
-  const route = (dest) => {
-    // owner can access admin via link; admin cannot access owner unless owner ID
-    hide($('#screen-login'));
-    hide($('#screen-owner'));
-    hide($('#screen-admin'));
-
-    if (dest === 'owner') {
-      show($('#screen-owner'));
-      initOwner();
-    } else if (dest === 'admin') {
-      show($('#screen-admin'));
-      initAdmin();
-    } else {
-      show($('#screen-login'));
-    }
-  };
-
-  // ========== Tabs (Owner) ==========
-  const bindTabs = () => {
-    $all('.tabs .tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $all('.tabs .tab').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const id = btn.dataset.tab;
-        ['owner-add','owner-stocks','owner-records'].forEach(sec => {
-          const el = document.getElementById(sec);
-          (sec === id) ? show(el) : hide(el);
-        });
-      });
-    });
-  };
-
-  // ========== Select Populators ==========
-  const fillSelect = (sel, items, getLabel = v => v, getValue = v => v) => {
-    sel.innerHTML = '';
-    items.forEach(it => {
-      const opt = document.createElement('option');
-      opt.textContent = getLabel(it);
-      opt.value = getValue(it);
-      sel.appendChild(opt);
-    });
-  };
-async function loadProductOptions() {
-  const sel = document.querySelector('#add-product, #get-product');
-  if (!sel) return;
-
-  let options = [];
-  try {
-    // try DB first (view product_options)
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000); // avoid infinite spinner
-    const { data, error } = await supabase
-      .from('product_options')
-      .select('product')
-      .order('product', { ascending: true })
-      .abortSignal(ctrl.signal);
-
-    clearTimeout(timer);
-
-    if (error) console.warn('product_options error:', error);
-    if (data && data.length) {
-      options = data.map(r => r.product);
-    }
-  } catch (e) {
-    console.warn('product_options timeout/fail:', e);
-  }
-
-  // fallback to static list if DB failed/empty
-  if (!options.length && Array.isArray(window.APP.PRODUCTS)) {
-    options = [...window.APP.PRODUCTS].sort((a,b)=>a.localeCompare(b));
-  }
-
-  // populate select
-  sel.innerHTML = '';
-  for (const name of options) {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
-  }
-}
-
-  const populateOwnerSelects = () => {
-    fillSelect($('#o-type'), APP.ACCOUNT_TYPES);
-    fillSelect($('#o-duration'), APP.DURATIONS, d => d[0], d => d[1]);
-    if (S.products.length) {
-      fillSelect($('#o-product'), S.products, p=>p.name, p=>p.name);
-    } else {
-      fillSelect($('#o-product'), ['Loading…']);
-    }
-  };
-
-  const populateAdminSelects = () => {
-    fillSelect($('#a-type'), APP.ACCOUNT_TYPES);
-    fillSelect($('#a-duration'), APP.DURATIONS, d => d[0], d => d[1]);
-    if (S.products.length) {
-      fillSelect($('#a-product'), S.products, p=>p.name, p=>p.name);
-    } else {
-      fillSelect($('#a-product'), ['Loading…']);
-    }
-  };
-
-  // ========== Owner Panel ==========
-  const initOwner = async () => {
-    bindTabs();
-    $('#link-admin').addEventListener('click', () => route('admin'));
-    $('#btn-logout-o').addEventListener('click', () => { clearSession(); route('login'); });
-
-    populateOwnerSelects();
-    setOverlay(true);
-    await loadProducts();
-    populateOwnerSelects();
-    setOverlay(false);
-
-    // Add stock (simple pass-through; robust mutations come in next batch)
-    $('#o-add-stock').onclick = async () => {
-      const payload = {
-        owner_id: S.uid,
-        product: $('#o-product').value,
-        account_type: $('#o-type').value,
-        duration_code: $('#o-duration').value,
-        qty: Math.max(1, parseInt($('#o-qty').value || '1', 10)),
-        email: ($('#o-email').value||null),
-        password: ($('#o-pass').value||null),
-        profile_name: ($('#o-profile').value||null),
-        pin: ($('#o-pin').value||null),
-        notes: ($('#o-notes').value||null)
-      };
-
-      setOverlay(true);
-      // Expecting a Postgres RPC (preferred) else insert to 'stocks' as fallback
-      let res;
-      try {
-        res = await sb.rpc('add_stock', payload); // if you created such RPC
-        if (res.error) throw res.error;
-      } catch {
-        // fallback: insert to 'stocks' table; adjust columns to your schema
-        const { error } = await sb.from('stocks').insert([{
-          owner_id: payload.owner_id,
-          product: payload.product,
-          account_type: payload.account_type,
-          duration_code: payload.duration_code,
-          qty: payload.qty,
-          email: payload.email,
-          password: payload.password,
-          profile_name: payload.profile_name,
-          pin: payload.pin,
-          notes: payload.notes
-        }]);
-        if (error) {
-          setOverlay(false);
-          alert('Add stock failed');
-          return;
-        }
-      }
-      setOverlay(false);
-      toast('Stock added');
-      $('#o-qty').value = '1';
-      $('#o-email').value = '';
-      $('#o-pass').value = '';
-      $('#o-profile').value = '';
-      $('#o-pin').value = '';
-      $('#o-notes').value = '';
-      await refreshOwnerStocks();
-    };
-
-    $('#o-refresh').onclick = refreshOwnerStocks;
-    await refreshOwnerStocks();
-    await refreshOwnerRecords();
-  };
-
-  const refreshOwnerStocks = async () => {
-    setOverlay(true);
-    const tbody = $('#o-stocks-table tbody');
-    tbody.innerHTML = '';
-    // Prefer your view 'stocks_summary' scoped by owner_id (if exists)
-    let rows = [];
-    try {
-      const { data, error } = await sb
-        .from('stocks_summary')
-        .select('product,account_type,duration_code,qty')
-        .eq('owner_id', S.uid)
-        .order('product', {ascending:true});
-      if (!error && data) rows = data;
-    } catch {}
-    // fallback: group stocks
-    if (!rows.length) {
-      const { data } = await sb
-        .from('stocks')
-        .select('product,account_type,duration_code,qty')
-        .eq('owner_id', S.uid);
-      rows.push(...(data||[]));
-    }
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.product||''}</td><td>${r.account_type||''}</td><td>${r.duration_code||''}</td><td>${r.qty||0}</td>`;
-      tbody.appendChild(tr);
-    });
-    setOverlay(false);
-  };
-
-  const refreshOwnerRecords = async () => {
-    const tbody = $('#o-records-table tbody');
-    tbody.innerHTML = '';
-    try {
-      const { data } = await sb
-        .from('sales')
-        .select('id,product,account_type,created_at,expires_at')
-        .eq('owner_id', S.uid)
-        .order('created_at', {ascending:false})
-        .limit(50);
-      (data||[]).forEach(r=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.id}</td><td>${r.product}</td><td>${r.account_type}</td><td>${fmtDT(r.created_at)}</td><td>${fmtDT(r.expires_at)}</td>`;
-        tbody.appendChild(tr);
-      });
-    } catch {}
-  };
-
-  // ========== Admin Panel ==========
-  const initAdmin = async () => {
-    $('#link-owner').addEventListener('click', () => route('owner'));
-    $('#btn-logout-a').addEventListener('click', () => { clearSession(); route('login'); });
-
-    populateAdminSelects();
-    setOverlay(true);
-    await loadProducts();
-    populateAdminSelects();
-    setOverlay(false);
-
-    $('#a-refresh').onclick = refreshAdminStocks;
-    await refreshAdminStocks();
-
-    $('#a-get').onclick = async () => {
-      setOverlay(true);
-      // Call your RPC get_account(owner_id?, product, type, duration) if available
-      let got;
-      try {
-        const { data, error } = await sb.rpc('get_account', {
-          owner_id: null, // scope decided inside RPC
-          product: $('#a-product').value,
-          account_type: $('#a-type').value,
-          duration_code: $('#a-duration').value
-        });
-        if (error) throw error;
-        got = data && data[0];
-      } catch {
-        setOverlay(false);
-        alert('get_account failed');
-        return;
-      }
-      setOverlay(false);
-      if (!got) { toast('No account available'); return; }
-
-      // Render details
-      const box = $('#a-details');
-      box.innerHTML = `
-        <div><b>Order id:</b> ${got.id ?? '-'}</div>
-        <div><b>Product name:</b> ${got.product ?? '-'}</div>
-        <div><b>Account type:</b> ${got.account_type ?? '-'}</div>
-        <div><b>Duration:</b> ${got.duration_label ?? got.duration_code ?? '-'}</div>
-        <div><b>Expiration:</b> ${fmtDT(got.expires_at)}</div>
-        <hr/>
-        <div><b>Email:</b> ${got.email ?? '-'}</div>
-        <div><b>Password:</b> ${got.password ?? '-'}</div>
-        <div><b>Profile:</b> ${got.profile_name ?? '-'}</div>
-        <div><b>PIN:</b> ${got.pin ?? '-'}</div>
-        <div><b>Taken by:</b> ${got.taken_by_name ?? 'Admin'}</div>
-      `;
-      show(box);
-
-      // Update records table quickly
-      await refreshAdminRecords();
-    };
-
-    await refreshAdminRecords();
-  };
-
-  const refreshAdminStocks = async () => {
-    const tbody = $('#a-stocks tbody'); tbody.innerHTML = '';
-    try {
-      const { data } = await sb.from('stocks_summary').select('product,account_type,duration_code,qty').gt('qty',0).order('product');
-      (data||[]).forEach(r=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.product}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.qty}</td>`;
-        tbody.appendChild(tr);
-      });
-    } catch {}
-  };
-
-  const refreshAdminRecords = async () => {
-    const tbody = $('#a-records tbody'); tbody.innerHTML='';
-    try {
-      const { data } = await sb.from('sales').select('id,product,account_type,created_at,expires_at').eq('admin_id', S.uid).order('created_at',{ascending:false}).limit(50);
-      (data||[]).forEach(r=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.id}</td><td>${r.product}</td><td>${r.account_type}</td><td>${fmtDT(r.created_at)}</td><td>${fmtDT(r.expires_at)}</td>`;
-        tbody.appendChild(tr);
-      });
-    } catch {}
-  };
-
-  // ========== utils ==========
-  const fmtDT = (d) => {
-    if (!d) return '-';
-    const dt = new Date(d);
-    return dt.toLocaleString();
-  };
-
-  // ========== boot ==========
-  const boot = async () => {
-    bindLogin();
-
-    // restore session if present
-    const s = loadSession();
-    if (s) {
-      S.role = s.role; S.uid = s.uid;
-      route(s.role);
+  // Init Supabase
+  function initSupabase() {
+    const { url, key } = window.APP || {};
+    if (!url || !key) {
+      toast('Missing Supabase config');
       return;
     }
-    route('login');
+    supabase = window.supabase.createClient(url, key, {
+      auth: { persistSession: false },
+    });
+  }
+
+  // -------- LOGIN BINDINGS -------- //
+  function bindLogin() {
+    $('#btnChooseOwner')?.addEventListener('click', () => {
+      $('#ownerBlock').classList.remove('hidden');
+      $('#adminBlock').classList.add('hidden');
+      $('#ownerInput').focus();
+    });
+
+    $('#btnChooseAdmin')?.addEventListener('click', () => {
+      $('#adminBlock').classList.remove('hidden');
+      $('#ownerBlock').classList.add('hidden');
+      $('#adminInput').focus();
+    });
+
+    $('#btnOwnerGo')?.addEventListener('click', () => {
+      const id = ($('#ownerInput').value || '').trim().toLowerCase();
+      if (id !== (window.APP.ownerId || '').toLowerCase())
+        return alert('UUID is not an Owner ID.');
+      whoAmI = { role: 'owner', id };
+      sessionStorage.setItem('role', 'owner');
+      sessionStorage.setItem('id', id);
+      enterOwner();
+    });
+
+    $('#btnAdminGo')?.addEventListener('click', () => {
+      const id = ($('#adminInput').value || '').trim().toLowerCase();
+      const ok = (window.APP.admins || [])
+        .map((x) => x.toLowerCase())
+        .includes(id);
+      if (!ok) return alert('UUID is not an Admin ID.');
+      whoAmI = { role: 'admin', id };
+      sessionStorage.setItem('role', 'admin');
+      sessionStorage.setItem('id', id);
+      enterAdmin();
+    });
+  }
+
+  function restoreSession() {
+    const role = sessionStorage.getItem('role');
+    const id = sessionStorage.getItem('id');
+    if (role && id) {
+      whoAmI = { role, id };
+      if (role === 'owner') enterOwner();
+      else enterAdmin();
+    }
+  }
+
+  // -------- OWNER PANEL -------- //
+  async function enterOwner() {
+    hide('#login');
+    show('#ownerPanel');
+    hide('#adminPanel');
+
+    $('#logoutOwner').onclick = doLogout;
+    $('#goAdmin').onclick = () => enterAdmin();
+
+    $$('.tabs').forEach((t) => t.addEventListener('click', switchTab));
+    $('#oaAddBtn').onclick = addStock;
+
+    await loadSelects();
+    await refreshOwnerStocks();
+    await refreshOwnerRecords();
+  }
+
+  // -------- ADMIN PANEL -------- //
+  async function enterAdmin() {
+    hide('#login');
+    hide('#ownerPanel');
+    show('#adminPanel');
+    $('#logoutAdmin').onclick = doLogout;
+    $('#goOwner').onclick = () => enterOwner();
+    await loadSelects(); // share same select list
+    toast('Logged in as Admin');
+  }
+
+  function doLogout() {
+    sessionStorage.clear();
+    whoAmI = null;
+    show('#login');
+    hide('#ownerPanel');
+    hide('#adminPanel');
+    $('#ownerBlock').classList.add('hidden');
+    $('#adminBlock').classList.add('hidden');
+    $('#ownerInput').value = '';
+    $('#adminInput').value = '';
+  }
+
+  // -------- TABS -------- //
+  function switchTab(evt) {
+    const btn = evt.target.closest('.tab');
+    if (!btn) return;
+    const name = btn.dataset.tab;
+    $$('.tab').forEach((b) => b.classList.toggle('active', b === btn));
+    ['ownerAdd', 'ownerStocks', 'ownerRecords'].forEach((id) => {
+      const el = $('#' + id);
+      if (el) el.classList.toggle('hidden', id !== name);
+    });
+  }
+
+  // -------- SELECT LOADER -------- //
+  async function loadSelects() {
+    await loadProductOptions();
+
+    const typeSel = $('#oaType');
+    const durSel = $('#oaDuration');
+
+    fillSelect(
+      typeSel,
+      (window.APP.ACCOUNT_TYPES || []).map((t) => [t, t])
+    );
+    fillSelect(durSel, window.APP.DURATIONS || []);
+  }
+
+  async function loadProductOptions() {
+    const prodSel1 = $('#oaProduct');
+    const prodSel2 = $('#getProduct');
+    const allProdSelects = [prodSel1, prodSel2].filter(Boolean);
+
+    allProdSelects.forEach((s) => {
+      s.innerHTML = '<option>Loading...</option>';
+    });
+
+    let options = [];
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000); // 4s timeout
+      const { data, error } = await supabase
+        .from('product_options')
+        .select('product')
+        .order('product', { ascending: true })
+        .abortSignal(ctrl.signal);
+      clearTimeout(timer);
+
+      if (error) console.warn('product_options error:', error);
+      if (data && data.length) options = data.map((r) => r.product);
+    } catch (e) {
+      console.warn('product_options timeout/fail:', e);
+    }
+
+    if (!options.length && Array.isArray(window.APP.PRODUCTS)) {
+      options = [...window.APP.PRODUCTS].sort((a, b) =>
+        a.localeCompare(b)
+      );
+    }
+
+    allProdSelects.forEach((sel) => fillSelect(sel, options.map((o) => [o, o])));
+  }
+
+  function fillSelect(sel, pairs) {
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (const pair of pairs) {
+      const [label, value] = Array.isArray(pair) ? pair : [pair, pair];
+      const opt = document.createElement('option');
+      opt.textContent = label;
+      opt.value = value;
+      sel.appendChild(opt);
+    }
+  }
+
+  // -------- OWNER ACTIONS -------- //
+  async function addStock() {
+    try {
+      const payload = {
+        product: $('#oaProduct').value,
+        account_type: $('#oaType').value,
+        duration_code: $('#oaDuration').value,
+        qty: Math.max(1, parseInt($('#oaQty').value || '1', 10)),
+        email: $('#oaEmail').value || null,
+        password: $('#oaPass').value || null,
+        profile_name: $('#oaProfile').value || null,
+        pin: $('#oaPin').value || null,
+        notes: $('#oaNotes').value || null,
+        owner_id: window.APP.ownerId,
+      };
+
+      const { error } = await supabase.rpc('add_stock_bulk', payload);
+      if (error) throw error;
+
+      toast('Stock added!');
+      $('#oaQty').value = '1';
+      await refreshOwnerStocks();
+    } catch (e) {
+      console.error(e);
+      alert('Add stock failed — check console / Supabase.');
+    }
+  }
+
+  async function refreshOwnerStocks() {
+    const tbody = $('#ownerStocksTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const { data, error } = await supabase
+        .from('stocks_summary')
+        .select('*')
+        .order('product');
+      if (error) throw error;
+
+      (data || []).forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.product || ''}</td>
+          <td>${row.account_type || ''}</td>
+          <td>${row.duration_label || row.duration_code || ''}</td>
+          <td>${row.qty || 0}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" disabled>Edit</button>
+            <button class="btn btn-ghost btn-sm" disabled>Remove</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      console.error('refreshOwnerStocks:', e);
+    }
+  }
+
+  async function refreshOwnerRecords() {
+    const tbody = $('#ownerRecordsTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select(
+          'id,product,account_type,created_at,expires_at,admin_id,warranty,voided'
+        )
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+
+      (data || []).forEach((r) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.id}</td>
+          <td>${r.product || ''}</td>
+          <td>${r.account_type || ''}</td>
+          <td>${fmtDT(r.created_at)}</td>
+          <td>${fmtDT(r.expires_at)}</td>
+          <td>${r.admin_id || '-'}</td>
+          <td>${r.warranty ? '✓' : ''}</td>
+          <td>${r.voided ? '✓' : ''}</td>
+          <td><button class="btn btn-secondary btn-sm" disabled>Edit</button></td>`;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      console.error('refreshOwnerRecords:', e);
+    }
+  }
+
+  const fmtDT = (s) => {
+    if (!s) return '';
+    const d = new Date(s);
+    return d.toLocaleString();
   };
 
-  // expose route('login') for logout flow
-  window.route = route;
-  // go
-  document.addEventListener('DOMContentLoaded', boot);
+  // -------- STARTUP -------- //
+  window.addEventListener('DOMContentLoaded', async () => {
+    try {
+      initSupabase();
+      bindLogin();
+      restoreSession();
+    } catch (e) {
+      console.error('App startup failed:', e);
+      toast('App failed to start.');
+    }
+  });
 })();
