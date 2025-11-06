@@ -56,5 +56,71 @@
     $('#ownerGo').onclick=()=>window.APP.login('owner',$('#ownerUUID').value.trim());
     $('#adminGo').onclick=()=>window.APP.login('admin',$('#adminUUID').value.trim());
   </script>
+  
+  <!-- put these at the very end of index.html, before </body> -->
+<script src="config.js"></script>
+<script src="https://esm.sh/@supabase/supabase-js@2"></script>
+<script>
+/* Minimal, non-module login logic — binds the buttons you have now */
+
+(function () {
+  // storage helpers
+  var SKEY = 'aiax.session';
+  function setSess(s){ localStorage.setItem(SKEY, JSON.stringify(s)); }
+
+  // normalize arrays even if config.js failed to load
+  var OWNER_IDS = (window.OWNER_IDS||[]).map(x=>String(x).toLowerCase());
+  var ADMIN_IDS = (window.ADMIN_IDS||[]).map(x=>String(x).toLowerCase());
+
+  function login(role, uuid){
+    uuid = (uuid||'').trim().toLowerCase();
+    if(!uuid){ alert('Please enter the UUID.'); return; }
+
+    if(role === 'owner'){
+      if(!OWNER_IDS.includes(uuid)){ alert('UUID is not an Owner ID.'); return; }
+      setSess({role:'owner', uuid: uuid});
+      location.href = 'owner.html';
+    }else{
+      if(!ADMIN_IDS.includes(uuid)){ alert('UUID is not an Admin ID.'); return; }
+      setSess({role:'admin', uuid: uuid});
+      location.href = 'admin.html';
+    }
+  }
+
+  // expose (optional)
+  window.APP = { login: login };
+
+  // bind current buttons/fields by ID
+  document.addEventListener('DOMContentLoaded', function(){
+    var ownerBtn = document.getElementById('ownerGo');
+    var adminBtn = document.getElementById('adminGo');
+    var ownerInp = document.getElementById('ownerUUID');
+    var adminInp = document.getElementById('adminUUID');
+    var openOwner = document.getElementById('openOwner');
+    var openAdmin = document.getElementById('openAdmin');
+    var ownerForm = document.getElementById('ownerForm');
+    var adminForm = document.getElementById('adminForm');
+
+    // guard in case some elements are missing
+    if(openOwner && ownerForm){ openOwner.onclick = function(){ ownerForm.classList.remove('hide'); if(adminForm) adminForm.classList.add('hide'); ownerInp && ownerInp.focus(); }; }
+    if(openAdmin && adminForm){ openAdmin.onclick = function(){ adminForm.classList.remove('hide'); if(ownerForm) ownerForm.classList.add('hide'); adminInp && adminInp.focus(); }; }
+
+    if(ownerBtn){ ownerBtn.onclick = function(){ login('owner', ownerInp && ownerInp.value); }; }
+    if(adminBtn){ adminBtn.onclick = function(){ login('admin', adminInp && adminInp.value); }; }
+
+    // allow Enter key in input to submit
+    [ownerInp, adminInp].forEach(function(inp){
+      if(!inp) return;
+      inp.addEventListener('keydown', function(e){
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          if(inp === ownerInp) login('owner', ownerInp.value);
+          else login('admin', adminInp.value);
+        }
+      });
+    });
+  });
+})();
+</script>
 </body>
 </html>
