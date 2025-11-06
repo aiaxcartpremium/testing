@@ -1,4 +1,4 @@
-<script>
+
 window.APP = {
   url: 'https://qddjhayaqkdcxqgdriav.supabase.co',
   key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkZGpoYXlhcWtkY3hxZ2RyaWF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyODEzMzUsImV4cCI6MjA3Nzg1NzMzNX0.Z_w3O9z6ZdZKt1TS3p4e6YYeUl1XHlCohLAatbA7g2U',
@@ -15,4 +15,3 @@ window.APP = {
     ['5 months','5m'],['6 months','6m'],['9 months','9m'],['10 months','10m'],['12 months','12m']
   ]
 };
-</script>
