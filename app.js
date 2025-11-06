@@ -124,23 +124,45 @@
       sel.appendChild(opt);
     });
   };
+async function loadProductOptions() {
+  const sel = document.querySelector('#add-product, #get-product');
+  if (!sel) return;
 
-  const loadProducts = async () => {
-    // Try to get from DB; fall back to last known or empty
-    try {
-      // Prefer your 'products' catalog if you have one
-      let { data, error } = await sb.from('products').select('name').order('name',{ascending:true});
-      if (error) {
-        // fallback to stocks_summary distinct product
-        const alt = await sb.from('stocks_summary').select('product').order('product',{ascending:true});
-        if (!alt.error && alt.data) data = alt.data.map(r=>({name:r.product}));
-      }
-      if (data && data.length) {
-        S.products = data.map(r => ({ name: r.name || r.product }));
-      }
-    } catch (_) {}
-    return S.products;
-  };
+  let options = [];
+  try {
+    // try DB first (view product_options)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000); // avoid infinite spinner
+    const { data, error } = await supabase
+      .from('product_options')
+      .select('product')
+      .order('product', { ascending: true })
+      .abortSignal(ctrl.signal);
+
+    clearTimeout(timer);
+
+    if (error) console.warn('product_options error:', error);
+    if (data && data.length) {
+      options = data.map(r => r.product);
+    }
+  } catch (e) {
+    console.warn('product_options timeout/fail:', e);
+  }
+
+  // fallback to static list if DB failed/empty
+  if (!options.length && Array.isArray(window.APP.PRODUCTS)) {
+    options = [...window.APP.PRODUCTS].sort((a,b)=>a.localeCompare(b));
+  }
+
+  // populate select
+  sel.innerHTML = '';
+  for (const name of options) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+}
 
   const populateOwnerSelects = () => {
     fillSelect($('#o-type'), APP.ACCOUNT_TYPES);
