@@ -1,4 +1,4 @@
-/* app.js — AiaxStock (v2025-11-07, “synced schema”) */
+/* app.js — AiaxStock (v2025-11-07.1 “admin categories + owner records”) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
@@ -10,6 +10,7 @@
   const setLoading = (on) => { const L=$(".loading-overlay"); if(!L) return; L.classList.toggle("hidden", !on); L.style.pointerEvents="none"; };
   const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
   const addDays = (date, days) => new Date(date.getTime() + (days||0)*86400000);
+
   // ── session (simple)
   const SKEY_ROLE = "aiax.role";
   const SKEY_UID  = "aiax.uid";
@@ -26,7 +27,7 @@
     return 0;
   };
 
-  // ── boot (wait until config.js is present)
+  // ── boot
   async function boot(){
     const APP = window.APP || {};
     if (!APP.url || !APP.key) { alert("Missing config.js"); return; }
@@ -49,19 +50,19 @@
     };
 
     async function loadProducts() {
-  try {
-    const { data, error } = await supabase
-      .from("products")
-      .select("key,label,category")
-      .order("label");
-    if (error) throw error;
-    if (data?.length) return data; // [{key,label,category}]
-  } catch {}
-  // fallback from APP.PRODUCTS -> default category 'Entertainment'
-  return (APP.PRODUCTS || []).map(x =>
-    typeof x === "string" ? { key: x.toLowerCase(), label: x, category: "Entertainment" } : x
-  );
-}
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select("key,label,category")
+          .order("label");
+        if (error) throw error;
+        if (data?.length) return data; // [{key,label,category}]
+      } catch {}
+      // fallback from APP.PRODUCTS -> default category 'Entertainment'
+      return (APP.PRODUCTS || []).map(x =>
+        typeof x === "string" ? { key: x.toLowerCase(), label: x, category: "Entertainment" } : x
+      );
+    }
     async function loadAccountTypes() {
       try { const {data,error} = await supabase.from("account_types").select("label").order("label"); if(error) throw error; if(data?.length) return data.map(r=>r.label); } catch {}
       return APP.ACCOUNT_TYPES || [];
@@ -70,73 +71,79 @@
       try { const {data,error} = await supabase.from("durations").select("label,code,seq").order("seq",{ascending:true}); if(error) throw error; if(data?.length) return data.map(r=>[r.label,r.code]); } catch {}
       return APP.DURATIONS || [];
     }
+
     async function primeOptions(){
-  // owner defaults
-  fillSelect("#productSelectOwner",[["Loading…",""]]);
-  fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
-  fillSelect("#durSelectOwner",  APP.DURATIONS || []);
+      // owner defaults
+      fillSelect("#productSelectOwner",[["Loading…",""]]);
+      fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
+      fillSelect("#durSelectOwner",  APP.DURATIONS || []);
 
-  // admin defaults
-  fillSelect("#catSelectAdmin",   [["Loading…",""]]);
-  fillSelect("#productSelectAdmin",[["Loading…",""]]);
-  fillSelect("#typeSelectAdmin",  []);
-  fillSelect("#durSelectAdmin",   []);
+      // admin defaults
+      fillSelect("#catSelectAdmin",   [["Loading…",""]]);
+      fillSelect("#productSelectAdmin",[["Loading…",""]]);
+      fillSelect("#typeSelectAdmin",  []);
+      fillSelect("#durSelectAdmin",   []);
 
-  const [prods,types,durs] = await Promise.all([
-    loadProducts(), loadAccountTypes(), loadDurations()
-  ]);
+      const [prods,types,durs] = await Promise.all([
+        loadProducts(), loadAccountTypes(), loadDurations()
+      ]);
 
-  // owner selects (product list label shown, value=key)
-  if (prods.length) fillSelect("#productSelectOwner", prods.map(r=>[r.label, r.key]));
-  if (types.length) fillSelect("#typeSelectOwner", types);
-  if (durs.length)  fillSelect("#durSelectOwner",  durs);
+      // owner selects (product list label shown, value=key)
+      if (prods.length) fillSelect("#productSelectOwner", prods.map(r=>[r.label, r.key]));
+      if (types.length) fillSelect("#typeSelectOwner", types);
+      if (durs.length)  fillSelect("#durSelectOwner",  durs);
 
-  // admin category -> product -> type/dur cascade
-  const catSel = $("#catSelectAdmin");
-  const prodSel = $("#productSelectAdmin");
-  const typeSel = $("#typeSelectAdmin");
-  const durSel  = $("#durSelectAdmin");
+      // admin category -> product -> type/dur cascade
+      const catSel = $("#catSelectAdmin");
+      const prodSel = $("#productSelectAdmin");
+      const typeSel = $("#typeSelectAdmin");
+      const durSel  = $("#durSelectAdmin");
 
-  const cats = [...new Set(prods.map(r => r.category || "Uncategorized"))];
-  fillSelect("#catSelectAdmin", cats.length ? cats : [["(none)",""]]);
+      const cats = [...new Set(prods.map(r => r.category || "Uncategorized"))];
 
-  function refreshProducts(){
-    const c = catSel.value;
-    const list = prods.filter(r => (r.category||"Uncategorized") === c);
-    fillSelect("#productSelectAdmin", list.map(r=>[r.label,r.key]));
-    refreshTypeDur();
-  }
-  function refreshTypeDur(){
-    const pkey = prodSel.value;
-    // Use availability to compute types/durations for selected product
-    adminAvailable().then(av => {
-      const sub=av.filter(r=>r.product===pkey);
-      const uniq = a => [...new Set(a)];
-      fillSelect("#typeSelectAdmin", uniq(sub.map(r=>r.account_type)));
-      fillSelect("#durSelectAdmin",  uniq(sub.map(r=>r.duration_code)));
-    });
-  }
+      if (!catSel) { // safety if HTML changed
+        fillSelect("#productSelectAdmin", prods.map(r=>[r.label,r.key]));
+        prodSel?.addEventListener("change", refreshTypeDur);
+        refreshTypeDur();
+        return;
+      }
 
-  catSel?.addEventListener("change", refreshProducts);
-  prodSel?.addEventListener("change", refreshTypeDur);
+      fillSelect("#catSelectAdmin", cats.length ? cats : [["(none)",""]]);
 
-  if (cats.length){ catSel.value = cats[0]; refreshProducts(); }
-}
-    // ---------- OWNER: add stock (matches public.stocks columns)
+      function refreshProducts(){
+        const c = catSel.value;
+        const list = prods.filter(r => (r.category||"Uncategorized") === c);
+        fillSelect("#productSelectAdmin", list.map(r=>[r.label,r.key]));
+        refreshTypeDur();
+      }
+      function refreshTypeDur(){
+        const pkey = prodSel?.value;
+        adminAvailable().then(av => {
+          const sub = av.filter(r=>r.product===pkey);
+          const uniq = a => [...new Set(a)];
+          fillSelect("#typeSelectAdmin", uniq(sub.map(r=>r.account_type)));
+          fillSelect("#durSelectAdmin",  uniq(sub.map(r=>r.duration_code)));
+        });
+      }
+      catSel.addEventListener("change", refreshProducts);
+      prodSel?.addEventListener("change", refreshTypeDur);
+
+      if (cats.length){ catSel.value = cats[0]; refreshProducts(); }
+    }
+
+    // ---------- OWNER: add stock
     async function ownerAddStock() {
-      const owner_id     = getUid();                          // uuid
-      const product      = $('#productSelectOwner')?.value||''; // TEXT (key)
-      const account_type = $('#typeSelectOwner')?.value||'';    // TEXT
-      const duration_code= $('#durSelectOwner')?.value||'';     // TEXT
-      const quantity     = parseInt($('#oaQty')?.value||'1',10);
+      const owner_id      = getUid();
+      const product       = $('#productSelectOwner')?.value||'';
+      const account_type  = $('#typeSelectOwner')?.value||'';
+      const duration_code = $('#durSelectOwner')?.value||'';
+      const quantity      = parseInt($('#oaQty')?.value||'1',10);
 
       const email        = ($('#oaEmail')?.value||'').trim();
       const password     = ($('#oaPass')?.value||'').trim();
       const profile_name = ($('#oaProfile')?.value||'').trim();
       const pin          = ($('#oaPin')?.value||'').trim();
       const notes        = ($('#oaNotes')?.value||'').trim();
-
-      // NOTE: IDs fixed to match your HTML
       const premiumed_at_raw = ($('#oaPremiumedAt')?.value||'').trim();
       const auto_expire_raw  = ($('#oaAutoExpireDays')?.value||'').trim();
 
@@ -146,8 +153,6 @@
       if (!quantity || quantity < 1) return alert('Quantity must be at least 1');
 
       const payload = { owner_id, product, account_type, duration_code, quantity };
-
-      // only set optional fields if they exist to avoid schema errors
       if (email)        payload.email = email;
       if (password)     payload.password = password;
       if (profile_name) payload.profile_name = profile_name;
@@ -166,7 +171,6 @@
       setLoading(false);
 
       if (error) { console.error(error); alert('Add stock failed: ' + (error.message||'unknown')); return; }
-
       toast('Stock added');
       $('#oaQty').value = '1';
       ['oaEmail','oaPass','oaProfile','oaPin','oaNotes','oaPremiumedAt','oaAutoExpireDays'].forEach(id => { const el = $('#'+id); if (el) el.value = ''; });
@@ -272,196 +276,208 @@
       toast(`Archived ${toArchive.length}`);
       ownerRenderStocks();
     }
-async function ownerAddRecord(){
-  // pick product/type/duration from simple prompts (keeps UI minimal)
-  const product = prompt("Product key (exact as in stocks):", "")?.trim() || "";
-  const account_type = prompt("Account type (exact):", "")?.trim() || "";
-  const duration_code = prompt("Duration code (e.g., 7d, 1m, 12m):", "")?.trim() || "";
-  if(!product || !account_type || !duration_code) return alert("All selections required.");
 
-  const addDaysStr = prompt("Additional days (warranty). Put 0 if none:", "0") || "0";
-  const warranty_days = Math.max(0, parseInt(addDaysStr,10) || 0);
-  const priceStr   = prompt("Price (optional):", "") || "";
-  const buyer_link = prompt("Buyer link (optional):", "") || "";
+    // ---------- OWNER: quick “Add Record”
+    async function ownerAddRecord(){
+      const product = prompt("Product key (exact as in stocks):", "")?.trim() || "";
+      const account_type = prompt("Account type (exact):", "")?.trim() || "";
+      const duration_code = prompt("Duration code (e.g., 7d, 1m, 12m):", "")?.trim() || "";
+      if(!product || !account_type || !duration_code) return alert("All selections required.");
 
-  // find one of your stocks to decrement
-  setLoading(true);
-  const { data:rows, error } = await supabase
-    .from("stocks")
-    .select("*")
-    .eq("owner_id", getUid())
-    .eq("product", product)
-    .eq("account_type", account_type)
-    .eq("duration_code", duration_code)
-    .eq("archived", false)
-    .gt("quantity", 0)
-    .order("created_at", {ascending:true})
-    .limit(1);
-  if(error){ setLoading(false); return alert("Lookup failed"); }
-  const stock = rows?.[0];
-  if(!stock){ setLoading(false); return alert("No matching stock with quantity > 0."); }
+      const addDaysStr = prompt("Additional days (warranty). Put 0 if none:", "0") || "0";
+      const warranty_days = Math.max(0, parseInt(addDaysStr,10) || 0);
+      const priceStr   = prompt("Price (optional):", "") || "";
+      const buyer_link = prompt("Buyer link (optional):", "") || "";
 
-  // decrement
-  const { error:decErr } = await supabase
-    .from("stocks")
-    .update({ quantity: (stock.quantity||1) - 1 })
-    .eq("id", stock.id)
-    .gt("quantity", 0);
-  if(decErr){ setLoading(false); return alert("Decrement failed"); }
+      // find a stock to decrement
+      setLoading(true);
+      const { data:rows, error } = await supabase
+        .from("stocks")
+        .select("*")
+        .eq("owner_id", getUid())
+        .eq("product", product)
+        .eq("account_type", account_type)
+        .eq("duration_code", duration_code)
+        .eq("archived", false)
+        .gt("quantity", 0)
+        .order("created_at", {ascending:true})
+        .limit(1);
+      if(error){ setLoading(false); return alert("Lookup failed"); }
+      const stock = rows?.[0];
+      if(!stock){ setLoading(false); return alert("No matching stock with quantity > 0."); }
 
-  // create sale
-  const now = new Date();
-  const baseExp = new Date(now.getTime() + durMs(duration_code));
-  const expWithWarranty = new Date(baseExp.getTime() + warranty_days*86400000);
+      // decrement
+      const { error:decErr } = await supabase
+        .from("stocks")
+        .update({ quantity: (stock.quantity||1) - 1 })
+        .eq("id", stock.id)
+        .gt("quantity", 0);
+      if(decErr){ setLoading(false); return alert("Decrement failed"); }
 
-  const { error:insErr } = await supabase.from("sales").insert([{
-    product,
-    account_type,
-    created_at: now.toISOString(),
-    expires_at: expWithWarranty.toISOString(),
-    admin_uuid: getUid(),     // owner performed the hand-out
-    owner_uuid: getUid(),
-    buyer_link: buyer_link.trim() || null,
-    price: priceStr==="" ? null : Number(priceStr),
-    warranty_days
-  }]);
-  setLoading(false);
-  if(insErr){ alert("Insert failed"); console.error(insErr); return; }
+      // create sale
+      const now = new Date();
+      const baseExp = new Date(now.getTime() + durMs(duration_code));
+      const expWithWarranty = new Date(baseExp.getTime() + warranty_days*86400000);
 
-  toast("Record added");
-  ownerRenderRecords();
-}
-    // ---------- OWNER: sales records
-    async function ownerRenderRecords(){
-  const tbody = $("#ownerRecordsTable tbody"); if(!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="9">Loading…</td></tr>`;
-  let rows = [];
-  try {
-    const {data,error}=await supabase
-      .from("sales")
-      .select("id,product,account_type,created_at,expires_at,price,buyer_link,admin_uuid,owner_uuid,warranty_days")
-      .eq("owner_uuid",getUid())
-      .order("id",{ascending:false}).limit(500);
-    if(error) throw error;
-    rows = data||[];
-  } catch(e){
-    console.error(e);
-    tbody.innerHTML = `<tr><td colspan="9">Failed to load.</td></tr>`;
-    return;
-  }
-
-  if(!rows.length){
-  tbody.innerHTML = `<tr><td colspan="9" class="muted">No records yet.</td></tr>`;
-  return;
-}
-
-tbody.innerHTML = rows.map(r=>`
-  <tr data-id="${r.id}">
-    <td>${r.id}</td>
-    <td>${r.product ?? ""}</td>
-    <td>${r.account_type ?? ""}</td>
-    <td>${fmtDT(r.created_at)}</td>
-    <td>${fmtDT(r.expires_at)}</td>
-    <td>${r.admin_uuid ? r.admin_uuid.slice(0,8) : ""}</td>
-    <td>${r.buyer_link || ""}</td>
-    <td>${r.price ?? ""}</td>
-    <td>
-      <button class="btn-outline btnRecEdit">Edit</button>
-      <button class="btn-outline btnRecDel">Delete</button>
-    </td>
-  </tr>
-`).join("");
-
-// wire: edit
-$$(".btnRecEdit", tbody).forEach(btn=>{
-  btn.addEventListener("click", async ()=>{
-    const tr = btn.closest("tr"); const id = tr.dataset.id;
-    // current values
-    const cur = {
-      product      : tr.children[1].textContent.trim(),
-      type         : tr.children[2].textContent.trim(),
-      created_at   : tr.children[3].textContent.trim(),
-      expires_at   : tr.children[4].textContent.trim(),
-      buyer_link   : tr.children[6].textContent.trim(),
-      price        : tr.children[7].textContent.trim()
-    };
-    const product = prompt("Product:", cur.product) ?? cur.product;
-    const type    = prompt("Account type:", cur.type) ?? cur.type;
-    const buyer   = prompt("Buyer link (blank to clear):", cur.buyer_link) || null;
-    const priceIn = prompt("Price (blank to clear):", cur.price) || "";
-    const price   = priceIn ? Number(priceIn) : null;
-
-    // warranty extend on edit
-    const addDaysStr = prompt("Add warranty days (0 to keep):", "0") || "0";
-    const extraDays  = parseInt(addDaysStr,10) || 0;
-
-    let expires = cur.expires_at ? new Date(cur.expires_at) : new Date();
-    if(extraDays>0) expires = addDays(expires, extraDays);
-
-    setLoading(true);
-    const { error } = await supabase.from("sales")
-      .update({
+      const { error:insErr } = await supabase.from("sales").insert([{
         product,
-        account_type: type,
-        buyer_link: buyer,
-        price,
-        expires_at: expires.toISOString()
-      })
-      .eq("id", id)
-      .eq("owner_uuid", getUid());
-    setLoading(false);
+        account_type,
+        created_at: now.toISOString(),
+        expires_at: expWithWarranty.toISOString(),
+        admin_uuid: getUid(),     // owner performed the hand-out (still recorded)
+        owner_uuid: getUid(),
+        buyer_link: buyer_link.trim() || null,
+        price: priceStr==="" ? null : Number(priceStr),
+        warranty_days
+      }]);
+      setLoading(false);
+      if(insErr){ alert("Insert failed"); console.error(insErr); return; }
 
-    if(error){ console.error(error); return alert("Update failed"); }
-    toast("Record updated");
-    ownerRenderRecords();
-  });
-});
+      toast("Record added");
+      ownerRenderRecords();
+    }
 
-// wire: delete
-$$(".btnRecDel", tbody).forEach(btn=>{
-  btn.addEventListener("click", async ()=>{
-    const tr = btn.closest("tr"); const id = tr.dataset.id;
-    if(!confirm(`Delete record #${id}?`)) return;
-    setLoading(true);
-    const { error } = await supabase.from("sales").delete().eq("id", id).eq("owner_uuid", getUid());
-    setLoading(false);
-    if(error){ console.error(error); return alert("Delete failed"); }
-    ownerRenderRecords();
-  });
-});
-function wireOwnerActions(){
-  $("#oaAddBtn")?.addEventListener("click", ownerAddStock);
-  $("#btnAddRecord")?.addEventListener("click", ownerAddRecord);   // ← new
-}
+    // ---------- OWNER: sales records list/edit/delete
+    async function ownerRenderRecords(){
+      const tbody = $("#ownerRecordsTable tbody"); if(!tbody) return;
+      tbody.innerHTML = `<tr><td colspan="9">Loading…</td></tr>`;
+      let rows = [];
+      try {
+        const {data,error}=await supabase
+          .from("sales")
+          .select("id,product,account_type,created_at,expires_at,price,buyer_link,admin_uuid,owner_uuid,warranty_days")
+          .eq("owner_uuid",getUid())
+          .order("id",{ascending:false}).limit(500);
+        if(error) throw error;
+        rows = data||[];
+      } catch(e){
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="9">Failed to load.</td></tr>`;
+        return;
+      }
 
-  // CSV export stays the same
-  $("#btnExportCSV")?.addEventListener("click", ()=>{
-    if(!rows.length) return;
-    const head = Object.keys(rows[0]);
-    const esc = v => v==null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v);
-    const csv = [head.join(","), ...rows.map(r=>head.map(k=>esc(r[k])).join(","))].join("\n");
-    const blob = new Blob([csv], {type:"text/csv"}); const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href=url; a.download="owner_records.csv"; a.click();
-    URL.revokeObjectURL(url);
-  }, { once:true });
-}
+      if(!rows.length){
+        tbody.innerHTML = `<tr><td colspan="9" class="muted">No records yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = rows.map(r=>`
+        <tr data-id="${r.id}">
+          <td>${r.id}</td>
+          <td>${r.product ?? ""}</td>
+          <td>${r.account_type ?? ""}</td>
+          <td>${fmtDT(r.created_at)}</td>
+          <td>${fmtDT(r.expires_at)}</td>
+          <td>${r.admin_uuid ? r.admin_uuid.slice(0,8) : ""}</td>
+          <td>${r.buyer_link || ""}</td>
+          <td>${r.price ?? ""}</td>
+          <td>
+            <button class="btn-outline btnRecEdit">Edit</button>
+            <button class="btn-outline btnRecDel">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+
+      // wire: edit
+      $$(".btnRecEdit", tbody).forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const tr = btn.closest("tr"); const id = tr.dataset.id;
+          const cur = {
+            product      : tr.children[1].textContent.trim(),
+            type         : tr.children[2].textContent.trim(),
+            expires_at   : tr.children[4].textContent.trim(),
+            buyer_link   : tr.children[6].textContent.trim(),
+            price        : tr.children[7].textContent.trim()
+          };
+          const product = prompt("Product:", cur.product) ?? cur.product;
+          const type    = prompt("Account type:", cur.type) ?? cur.type;
+          const buyer   = prompt("Buyer link (blank to clear):", cur.buyer_link) || null;
+          const priceIn = prompt("Price (blank to clear):", cur.price) || "";
+          const price   = priceIn ? Number(priceIn) : null;
+
+          // warranty extend on edit
+          const addDaysStr = prompt("Add warranty days (0 to keep):", "0") || "0";
+          const extraDays  = parseInt(addDaysStr,10) || 0;
+          let expires = cur.expires_at ? new Date(cur.expires_at) : new Date();
+          if(extraDays>0) expires = addDays(expires, extraDays);
+
+          setLoading(true);
+          const { error } = await supabase.from("sales")
+            .update({ product, account_type: type, buyer_link: buyer, price, expires_at: expires.toISOString() })
+            .eq("id", id)
+            .eq("owner_uuid", getUid());
+          setLoading(false);
+
+          if(error){ console.error(error); return alert("Update failed"); }
+          toast("Record updated");
+          ownerRenderRecords();
+        });
+      });
+
+      // wire: delete
+      $$(".btnRecDel", tbody).forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const tr = btn.closest("tr"); const id = tr.dataset.id;
+          if(!confirm(`Delete record #${id}?`)) return;
+          setLoading(true);
+          const { error } = await supabase.from("sales").delete().eq("id", id).eq("owner_uuid", getUid());
+          setLoading(false);
+          if(error){ console.error(error); return alert("Delete failed"); }
+          ownerRenderRecords();
+        });
+      });
+
+      // CSV export
+      $("#btnExportCSV")?.addEventListener("click", ()=>{
+        if(!rows.length) return;
+        const head = Object.keys(rows[0]);
+        const esc = v => v==null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v);
+        const csv = [head.join(","), ...rows.map(r=>head.map(k=>esc(r[k])).join(","))].join("\n");
+        const blob = new Blob([csv], {type:"text/csv"});
+        const url  = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "owner_records.csv"; a.click();
+        URL.revokeObjectURL(url);
+      }, { once:true });
+    }
+
     // ---------- ADMIN
     async function adminAvailable(){
       try{
-        const {data,error} = await supabase.from("stocks_available_for_admin").select("product,account_type,duration_code,total_qty").order("product");
-        if(error) throw error; if(data?.length) return data;
+        const {data,error} = await supabase
+          .from("stocks_available_for_admin")
+          .select("product,account_type,duration_code,total_qty")
+          .order("product");
+        if(error) throw error;
+        if(data?.length) return data;
       } catch{}
-      const {data,error} = await supabase.from("stocks").select("product,account_type,duration_code,quantity,archived").gt("quantity",0).eq("archived",false);
+      // fallback: aggregate directly from stocks
+      const {data,error} = await supabase
+        .from("stocks")
+        .select("product,account_type,duration_code,quantity,archived")
+        .gt("quantity",0)
+        .eq("archived",false);
       if(error){ console.error(error); return []; }
-      const map=new Map(); for(const r of data){ const k=`${r.product}|${r.account_type}|${r.duration_code}`; map.set(k,(map.get(k)||0)+(r.quantity||0)); }
-      return [...map.entries()].map(([k,qty])=>{ const [product,account_type,duration_code]=k.split("|"); return {product,account_type,duration_code,total_qty:qty};});
+      const map=new Map();
+      for(const r of data){
+        const k=`${r.product}|${r.account_type}|${r.duration_code}`;
+        map.set(k,(map.get(k)||0)+(r.quantity||0));
+      }
+      return [...map.entries()].map(([k,qty])=>{
+        const [product,account_type,duration_code]=k.split("|");
+        return {product,account_type,duration_code,total_qty:qty};
+      });
     }
+
     async function adminRenderAvailable(){
       const body=$("#adminStocksBody"); if(!body) return;
       body.innerHTML = `<tr><td colspan="4">Fetching…</td></tr>`;
       const rows = await adminAvailable();
-      body.innerHTML = rows.length ? rows.map(r=>`<tr><td>${r.product}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.total_qty}</td></tr>`).join("") : `<tr><td colspan="4" class="muted">No data yet</td></tr>`;
+      body.innerHTML = rows.length
+        ? rows.map(r=>`<tr><td>${r.product}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.total_qty}</td></tr>`).join("")
+        : `<tr><td colspan="4" class="muted">No data yet</td></tr>`;
     }
+
     async function adminFillFormOptions(){
       const prodSel=$("#productSelectAdmin"), typeSel=$("#typeSelectAdmin"), durSel=$("#durSelectAdmin");
       if(!prodSel||!typeSel||!durSel) return;
@@ -469,99 +485,114 @@ function wireOwnerActions(){
       const products=uniq(avail.map(r=>r.product));
       prodSel.innerHTML = "";
       products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; prodSel.appendChild(o); });
-      function refresh(){ const p=prodSel.value; const sub=avail.filter(r=>r.product===p); typeSel.innerHTML=""; durSel.innerHTML=""; uniq(sub.map(r=>r.account_type)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;typeSel.appendChild(o);}); uniq(sub.map(r=>r.duration_code)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;durSel.appendChild(o);}); }
+      function refresh(){
+        const p=prodSel.value; const sub=avail.filter(r=>r.product===p);
+        typeSel.innerHTML=""; durSel.innerHTML="";
+        uniq(sub.map(r=>r.account_type)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;typeSel.appendChild(o);});
+        uniq(sub.map(r=>r.duration_code)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;durSel.appendChild(o);});
+      }
       if(products.length){ prodSel.value=products[0]; refresh(); }
       prodSel.addEventListener("change", refresh);
     }
+
     async function adminGetAccount(){
-  const product=$("#productSelectAdmin")?.value, type=$("#typeSelectAdmin")?.value, duration=$("#durSelectAdmin")?.value;
-  if(!product||!type||!duration) return alert("Complete the selections first.");
-  const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
+      const product=$("#productSelectAdmin")?.value,
+            type=$("#typeSelectAdmin")?.value,
+            duration=$("#durSelectAdmin")?.value;
+      if(!product||!type||!duration) return alert("Complete the selections first.");
+      const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
 
-  setLoading(true);
-  let res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration });
-  // retry with “other” order if cache complains
-  if(res.error && /schema cache|not find the function/i.test(res.error.message)){
-    res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_duration:duration, p_product:product, p_type:type });
-  }
-  setLoading(false);
+      setLoading(true);
+      let res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration });
+      // retry with “other” order if schema cache complains
+      if(res.error && /schema cache|not find the function/i.test(res.error.message)){
+        res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_duration:duration, p_product:product, p_type:type });
+      }
+      setLoading(false);
 
-  if(res.error) return alert("get_account failed: " + res.error.message);
-  const data = res.data || [];
-  if(!data.length){ $("#adminCreds").textContent = "No matching stock."; return; }
+      if(res.error) return alert("get_account failed: " + res.error.message);
+      const data = res.data || [];
+      if(!data.length){ $("#adminCreds").textContent = "No matching stock."; return; }
 
-  const r = data[0];
-  $("#adminCreds").innerHTML = `
-    <div class="card">
-      <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
-      <div><b>Email:</b> ${r.email || "-"}</div>
-      <div><b>Password:</b> ${r.password || "-"}</div>
-      <div><b>Profile:</b> ${r.profile_name || "-"} &nbsp; <b>PIN:</b> ${r.pin || "-"}</div>
-      <div><b>Expires:</b> ${r.expires_at ? new Date(r.expires_at).toLocaleString() : "-"}</div>
-    </div>`;
-  await adminRefreshAll();
-}
+      const r = data[0];
+      $("#adminCreds").innerHTML = `
+        <div class="card">
+          <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
+          <div><b>Email:</b> ${r.email || "-"}</div>
+          <div><b>Password:</b> ${r.password || "-"}</div>
+          <div><b>Profile:</b> ${r.profile_name || "-"} &nbsp; <b>PIN:</b> ${r.pin || "-"}</div>
+          <div><b>Expires:</b> ${r.expires_at ? new Date(r.expires_at).toLocaleString() : "-"}</div>
+        </div>`;
+      await adminRefreshAll();
+    }
+
     async function adminRenderMySales(){
-  const tbody=$("#adminRecordsTable tbody"); if(!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="6">Loading…</td></tr>`;
-  try{
-    const {data,error}=await supabase.rpc("list_my_sales",{ p_admin:getUid() });
-    if(error) throw error;
-    const rows=data||[];
-    if(!rows.length){ tbody.innerHTML = `<tr><td colspan="6" class="muted">No records yet.</td></tr>`; return; }
-    tbody.innerHTML = rows.map(r=>`
-      <tr data-id="${r.id}">
-        <td>${r.id}</td>
-        <td>${r.product ?? ""}</td>
-        <td>${r.account_type ?? ""}</td>
-        <td>${fmtDT(r.created_at)}</td>
-        <td>${fmtDT(r.expires_at)}</td>
-        <td>
-          <button class="btn-outline btnEditRec">Edit</button>
-        </td>
-      </tr>`).join("");
+      const tbody=$("#adminRecordsTable tbody"); if(!tbody) return;
+      tbody.innerHTML = `<tr><td colspan="6">Loading…</td></tr>`;
+      try{
+        const {data,error}=await supabase.rpc("list_my_sales",{ p_admin:getUid() });
+        if(error) throw error;
+        const rows=data||[];
+        if(!rows.length){ tbody.innerHTML = `<tr><td colspan="6" class="muted">No records yet.</td></tr>`; return; }
+        tbody.innerHTML = rows.map(r=>`
+          <tr data-id="${r.id}">
+            <td>${r.id}</td>
+            <td>${r.product ?? ""}</td>
+            <td>${r.account_type ?? ""}</td>
+            <td>${fmtDT(r.created_at)}</td>
+            <td>${fmtDT(r.expires_at)}</td>
+            <td>
+              <button class="btn-outline btnEditRec">Edit</button>
+            </td>
+          </tr>`).join("");
 
-    $$(".btnEditRec", tbody).forEach(b=>b.addEventListener("click", async ()=>{
-      const id = b.closest("tr").dataset.id;
-      const buyer_link = prompt("Buyer link (leave blank to clear):", "") || null;
-      const priceStr   = prompt("Price (number, leave blank to clear):", "") || "";
-      const price = priceStr === "" ? null : Number(priceStr);
-      const { error } = await supabase.from("sales").update({ buyer_link, price }).eq("id", id);
-      if(error){ alert("Update failed"); console.error(error); return; }
-      adminRenderMySales();
-    }));
-  }catch(e){
-    console.error(e);
-    tbody.innerHTML = `<tr><td colspan="6">Failed to load.</td></tr>`;
-  }
-}
-    async function adminRefreshAll(){ await adminRenderAvailable(); await adminFillFormOptions(); await adminRenderMySales(); }
+        $$(".btnEditRec", tbody).forEach(b=>b.addEventListener("click", async ()=>{
+          const id = b.closest("tr").dataset.id;
+          const buyer_link = prompt("Buyer link (leave blank to clear):", "") || null;
+          const priceStr   = prompt("Price (number, leave blank to clear):", "") || "";
+          const price = priceStr === "" ? null : Number(priceStr);
+          const { error } = await supabase.from("sales").update({ buyer_link, price }).eq("id", id);
+          if(error){ alert("Update failed"); console.error(error); return; }
+          adminRenderMySales();
+        }));
+      }catch(e){
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="6">Failed to load.</td></tr>`;
+      }
+    }
 
-    // ---------- UI wiring
+    async function adminRefreshAll(){
+      await adminRenderAvailable();
+      await adminFillFormOptions();
+      await adminRenderMySales();
+    }
+
+    // ---------- UI wiring + routing
     function showOwner(){
-  if(getRole()!=="owner"){ alert("Owners only."); return; }
-  $("#viewLogin")?.classList.add("hidden");
-  $("#viewAdmin")?.classList.add("hidden");
-  $("#viewOwner")?.classList.remove("hidden");
-  $("#goToOwner")?.classList.add("hidden");       
-  $("#goToAdmin")?.classList.toggle("hidden", getRole()!=="owner");
-}
+      if(getRole()!=="owner"){ alert("Owners only."); return; }
+      $("#viewLogin")?.classList.add("hidden");
+      $("#viewAdmin")?.classList.add("hidden");
+      $("#viewOwner")?.classList.remove("hidden");
+      $("#goToOwner")?.classList.add("hidden");                 // hide "go to owner" when already owner
+      $("#goToAdmin")?.classList.toggle("hidden", getRole()!=="owner");
+    }
+    function showAdmin(){
+      $("#viewLogin")?.classList.add("hidden");
+      $("#viewOwner")?.classList.add("hidden");
+      $("#viewAdmin")?.classList.remove("hidden");
+      $("#goToOwner")?.classList.toggle("hidden", getRole()!=="owner"); // only owner can see this
+      $("#goToAdmin")?.classList.add("hidden");
+    }
+    function showLogin(){
+      $("#viewLogin")?.classList.remove("hidden");
+      $("#viewOwner")?.classList.add("hidden");
+      $("#viewAdmin")?.classList.add("hidden");
+    }
 
-function showAdmin(){
-  $("#viewLogin")?.classList.add("hidden");
-  $("#viewOwner")?.classList.add("hidden");
-  $("#viewAdmin")?.classList.remove("hidden");
-  $("#goToOwner")?.classList.toggle("hidden", getRole()!=="owner");
-  $("#goToAdmin")?.classList.add("hidden");
-}
-
-function showLogin(){
-  $("#viewLogin")?.classList.remove("hidden");
-  $("#viewOwner")?.classList.add("hidden");
-  $("#viewAdmin")?.classList.add("hidden");
-}
-    // ensure button type=button
-    ["#btnLoginOwner","#btnLoginAdmin","#continueOwner","#continueAdmin","#oaAddBtn","#getAccountBtn","#btnOwnerRefresh","#btnOwnerPurge"].forEach(s=>{const b=$(s); if(b) b.type="button";});
+    // ensure button type=button (avoid form submit refresh)
+    ["#btnLoginOwner","#btnLoginAdmin","#continueOwner","#continueAdmin",
+     "#oaAddBtn","#getAccountBtn","#btnOwnerRefresh","#btnOwnerPurge",
+     "#btnAddRecord","#btnExportCSV"].forEach(s=>{const b=$(s); if(b) b.type="button";});
 
     // login
     const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
@@ -573,19 +604,36 @@ function showLogin(){
 
     document.addEventListener("click",(e)=>{
       const t=e.target.closest("#continueOwner,#continueAdmin"); if(!t) return; e.preventDefault();
-      if(t.id==="continueOwner"){ const id=(inputOwner?.value||"").trim(); if(!isOwner(id)) return alert("UUID is not an Owner ID."); setSess("owner", id); showOwner(); ownerRenderStocks(); ownerRenderRecords(); }
-      else { const id=(inputAdmin?.value||"").trim(); if(!(isOwner(id)||isAdmin(id))) return alert("UUID is not an Admin ID."); setSess("admin", id); showAdmin(); adminRefreshAll(); }
+      if(t.id==="continueOwner"){
+        const id=(inputOwner?.value||"").trim();
+        if(!isOwner(id)) return alert("UUID is not an Owner ID.");
+        setSess("owner", id); showOwner(); ownerRenderStocks(); ownerRenderRecords();
+      }else{
+        const id=(inputAdmin?.value||"").trim();
+        if(!(isOwner(id)||isAdmin(id))) return alert("UUID is not an Admin ID.");
+        setSess("admin", id); showAdmin(); adminRefreshAll();
+      }
     });
 
     // top nav + owner tabs
     $("#goToAdmin")?.addEventListener("click", ()=>{ if(getRole()){ showAdmin(); adminRefreshAll(); }});
-    $("#goToOwner")?.addEventListener("click", ()=>{ if(getRole()){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); }});
+    $("#goToOwner")?.addEventListener("click", ()=>{ if(getRole()==="owner"){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); }});
     $$(".btnLogout").forEach(b=>b.addEventListener("click", ()=>{ clearSess(); showLogin(); }));
-    const tabs=$$(".tab"); tabs.forEach(t=>t.addEventListener("click",()=>{ tabs.forEach(x=>x.classList.remove("active")); t.classList.add("active"); const target=t.dataset.target; $$(".tab-page").forEach(p=>p.classList.add("hidden")); $("#"+target)?.classList.remove("hidden"); }));
+
+    const tabs=$$(".tab");
+    tabs.forEach(t=>t.addEventListener("click",()=>{
+      tabs.forEach(x=>x.classList.remove("active"));
+      t.classList.add("active");
+      const target=t.dataset.target;
+      $$(".tab-page").forEach(p=>p.classList.add("hidden"));
+      $("#"+target)?.classList.remove("hidden");
+    }));
+
     $("#btnOwnerRefresh")?.addEventListener("click", ownerRenderStocks);
     $("#btnOwnerPurge")?.addEventListener("click", ownerPurgeExpired);
     $("#chkShowArchived")?.addEventListener("change", ownerRenderStocks);
     $("#oaAddBtn")?.addEventListener("click", ownerAddStock);
+    $("#btnAddRecord")?.addEventListener("click", ownerAddRecord);
     $("#getAccountBtn")?.addEventListener("click", adminGetAccount);
 
     // auto-view based on session
@@ -593,7 +641,9 @@ function showLogin(){
     if(r && u){
       if(r==="owner"){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); }
       else { showAdmin(); adminRefreshAll(); }
-    } else showLogin();
+    } else {
+      showLogin();
+    }
 
     // prime options finally
     await primeOptions();
