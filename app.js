@@ -60,38 +60,65 @@
     if(durs.length){ fillSelect("#durSelectOwner",durs); fillSelect("#durSelectAdmin",durs); }
   }
 
-  // ── OWNER: add stock
-  async function ownerAddStock(){
-    const owner_uuid = getUid();
-    const product      = $("#productSelectOwner")?.value || "";
-    const account_type = $("#typeSelectOwner")?.value || "";
-    const duration_code= $("#durSelectOwner")?.value || "";
-    const quantity     = parseInt($("#oaQty")?.value || "1",10);
-    const email        = ($("#oaEmail")?.value||"").trim() || null;
-    const password     = ($("#oaPass")?.value||"").trim()  || null;
-    const profile_name = ($("#oaProfile")?.value||"").trim()|| null;
-    const pin          = ($("#oaPin")?.value||"").trim()    || null;
-    const notes        = ($("#oaNotes")?.value||"").trim()  || null;
-    const premiumed_at = $("#oaPremiumedAt")?.value ? new Date($("#oaPremiumedAt").value).toISOString() : null;
-    const auto_expire_days = $("#oaAutoExpireDays")?.value ? parseInt($("#oaAutoExpireDays").value,10) : null;
+  // ─── OWNER: add stock (hotfix: send optional cols only when present) ─────────
+async function ownerAddStock() {
+  const owner_uuid   = getUid();
+  const product      = $('#productSelectOwner')?.value || '';
+  const account_type = $('#typeSelectOwner')?.value || '';
+  const duration_code= $('#durSelectOwner')?.value || '';
+  const quantity     = parseInt($('#oaQty')?.value || '1', 10);
 
-    if(!owner_uuid) return alert("Session missing. Please re-login.");
-    if(!product) return alert("Select a product");
-    if(!account_type) return alert("Select account type");
-    if(!duration_code) return alert("Select duration");
-    if(!quantity || quantity<1) return alert("Quantity must be at least 1");
+  const email        = ($('#oaEmail')?.value || '').trim();
+  const password     = ($('#oaPass')?.value || '').trim();
+  const profile_name = ($('#oaProfile')?.value || '').trim();
+  const pin          = ($('#oaPin')?.value || '').trim();
+  const notes        = ($('#oaNotes')?.value || '').trim();
 
-    setLoading(true);
-    const payload = { owner_uuid, product, account_type, duration_code, quantity, email, password, profile_name, pin, notes, premiumed_at, auto_expire_days };
-    const { error } = await supabase.from("stocks").insert([payload]);
-    setLoading(false);
+  // NEW optional fields (can be blank)
+  const premiumed_at_raw  = ($('#oaPremiumed')?.value || '').trim(); // ISO or yyyy-mm-dd
+  const auto_expire_raw   = ($('#oaAutoExpire')?.value || '').trim(); // number of days
 
-    if(error){ console.error(error); alert(`Add stock failed\n${error.message||""}`); return; }
-    toast("Stock added");
-    $("#oaQty").value="1";
-    ["#oaEmail","#oaPass","#oaProfile","#oaPin","#oaNotes","#oaPremiumedAt","#oaAutoExpireDays"].forEach(s=>{const i=$(s); if(i) i.value="";});
-    await ownerRenderStocks();
+  if (!product)      return alert('Select a product');
+  if (!account_type) return alert('Select account type');
+  if (!duration_code)return alert('Select duration');
+  if (!quantity || quantity < 1) return alert('Quantity must be at least 1');
+
+  // Build payload with requireds
+  const payload = {
+    owner_uuid, product, account_type, duration_code, quantity
+  };
+
+  // add optionals only if non-empty (prevents “column not found in schema cache”)
+  if (email)        payload.email = email;
+  if (password)     payload.password = password;
+  if (profile_name) payload.profile_name = profile_name;
+  if (pin)          payload.pin = pin;
+  if (notes)        payload.notes = notes;
+
+  // Only include these IF you actually typed values
+  if (premiumed_at_raw) {
+    // allow date-only input; convert to ISO start-of-day
+    const d = new Date(premiumed_at_raw);
+    if (!isNaN(d)) payload.premiumed_at = d.toISOString();
   }
+  if (auto_expire_raw && !isNaN(parseInt(auto_expire_raw, 10))) {
+    payload.auto_expire_days = parseInt(auto_expire_raw, 10);
+  }
+
+  setLoading(true);
+  const { error } = await supabase.from('stocks').insert([payload]);
+  setLoading(false);
+
+  if (error) { console.error(error); alert('Add stock failed'); return; }
+
+  toast('Stock added');
+  // reset minimal inputs (keep selects)
+  $('#oaQty').value = '1';
+  ['oaEmail','oaPass','oaProfile','oaPin','oaNotes','oaPremiumed','oaAutoExpire']
+    .forEach(id => { const el = $('#'+id); if (el) el.value = ''; });
+
+  await ownerRenderStocks();
+}
 
   // ── OWNER: list (raw for per-row edit/remove), purge
   function ownerStocksSelect(showArchived){
