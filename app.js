@@ -293,63 +293,31 @@
       prodSel.addEventListener("change", refresh);
     }
     async function adminGetAccount(){
-      const product=$("#productSelectAdmin")?.value, type=$("#typeSelectAdmin")?.value, duration=$("#durSelectAdmin")?.value;
-      if(!product||!type||!duration) return alert("Complete the selections first.");
-      const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
+  const product=$("#productSelectAdmin")?.value, type=$("#typeSelectAdmin")?.value, duration=$("#durSelectAdmin")?.value;
+  if(!product||!type||!duration) return alert("Complete the selections first.");
+  const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
 
-      setLoading(true);
-      let data=null, error=null;
-      try{ const res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration }); data=res.data; error=res.error; }catch(e){ error=e; }
-      setLoading(false);
+  setLoading(true);
+  let res;
+  try { res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration }); }
+  finally { setLoading(false); }
 
-      if(error || !data?.length){
-        // fallback: oldest unarchived with qty>0
-        const { data:rows, error:e2 } = await supabase.from("stocks").select("*").eq("product",product).eq("account_type",type).eq("duration_code",duration).eq("archived",false).gt("quantity",0).order("created_at",{ascending:true}).limit(1);
-        if(e2){ console.error(e2); return alert("get_account failed."); }
-        const row = rows?.[0];
-        if(!row){ const out=$("#adminCreds"); if(out) out.textContent="No matching stock."; return; }
+  if(res?.error) return alert("get_account failed: " + res.error.message);
+  const data = res?.data || [];
+  if(!data.length){ const out=$("#adminCreds"); if(out) out.textContent="No matching stock."; return; }
 
-        // decrement
-        const { error:e3 } = await supabase.from("stocks").update({ quantity: (row.quantity||1)-1 }).eq("id", row.id).gt("quantity",0);
-        if(e3){ console.error(e3); return alert("get_account failed (decrement)."); }
-
-        // create a minimal sales record
-        const now = new Date();
-        const expires_at = new Date(now.getTime() + durMs(duration)).toISOString();
-        await supabase.from("sales").insert([{
-          product, account_type:type, created_at: now.toISOString(), expires_at,
-          admin_uuid, owner_uuid: row.owner_id, buyer_link: null, price: null
-        }]);
-
-        const out = $("#adminCreds");
-        if(out){
-          out.innerHTML = `
-            <div class="card">
-              <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
-              <div><b>Email:</b> ${row.email || "-"}</div>
-              <div><b>Password:</b> ${row.password || "-"}</div>
-              <div><b>Profile:</b> ${row.profile_name || "-"} &nbsp; <b>PIN:</b> ${row.pin || "-"}</div>
-            </div>
-          `;
-        }
-      } else {
-        const r = data[0];
-        const out=$("#adminCreds");
-        if(out){
-          out.innerHTML = `
-            <div class="card">
-              <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
-              <div><b>Email:</b> ${r.email || "-"}</div>
-              <div><b>Password:</b> ${r.password || "-"}</div>
-              <div><b>Profile:</b> ${r.profile_name || "-"} &nbsp; <b>PIN:</b> ${r.pin || "-"}</div>
-              <div><b>Expires:</b> ${fmtDT(r.expires_at)}</div>
-            </div>
-          `;
-        }
-      }
-
-      await adminRefreshAll();
-    }
+  const r = data[0];
+  $("#adminCreds").innerHTML = `
+    <div class="card">
+      <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
+      <div><b>Email:</b> ${r.email || "-"}</div>
+      <div><b>Password:</b> ${r.password || "-"}</div>
+      <div><b>Profile:</b> ${r.profile_name || "-"} &nbsp; <b>PIN:</b> ${r.pin || "-"}</div>
+      <div><b>Expires:</b> ${r.expires_at ? new Date(r.expires_at).toLocaleString() : "-"}</div>
+    </div>
+  `;
+  await adminRefreshAll();
+}
     async function adminRenderMySales(){
       const tbody=$("#adminRecordsTable tbody"); if(!tbody) return;
       tbody.innerHTML = `<tr><td colspan="5">Loading…</td></tr>`;
