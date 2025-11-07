@@ -109,8 +109,11 @@ async function ownerAddStock() {
   const { error } = await supabase.from('stocks').insert([payload]);
   setLoading(false);
 
-  if (error) { console.error(error); alert('Add stock failed'); return; }
-
+  if (error) {
+  console.error('[stocks.insert] failed:', error);
+  alert('Add stock failed: ' + (error.message || JSON.stringify(error)));
+  return;
+}
   toast('Stock added');
   // reset minimal inputs (keep selects)
   $('#oaQty').value = '1';
