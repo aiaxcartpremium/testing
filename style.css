@@ -152,6 +152,16 @@ input:focus, select:focus{ outline:none; border-color:#f2a0ba; box-shadow:0 0 0 
   background: #000;
   color: #fff;
 }
+/* Center the whole login section */
+.login-center{
+  min-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.login-center h1,
+.login-center p{ text-align:center; }
+.login-columns{ max-width: 780px; margin: 0 auto; }
 /* Minor spacing polish */
 #viewOwner .tab-page + .tab-page,
 #viewAdmin h2 + .table-wrap,
