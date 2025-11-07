@@ -73,6 +73,10 @@
     }
 
     async function primeOptions(){
+      const [prods, types, durs] = await Promise.all([loadProducts(), loadAccountTypes(), loadDurations()]);
+ALL_PRODUCTS = prods;       // <— save
+buildCatBar();              // <— create the chips
+  
       // owner defaults
       fillSelect("#productSelectOwner",[["Loading…",""]]);
       fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
@@ -279,63 +283,85 @@
 
     // ---------- OWNER: quick “Add Record”
     async function ownerAddRecord(){
-      const product = prompt("Product key (exact as in stocks):", "")?.trim() || "";
-      const account_type = prompt("Account type (exact):", "")?.trim() || "";
-      const duration_code = prompt("Duration code (e.g., 7d, 1m, 12m):", "")?.trim() || "";
-      if(!product || !account_type || !duration_code) return alert("All selections required.");
+  const product = $("#recProduct")?.value.trim();
+  const account_type = $("#recType")?.value.trim();
+  const expires_in_ui = $("#recExpires")?.value.trim(); // optional direct datetime
+  const buyer_link = $("#recBuyer")?.value.trim() || null;
+  const priceStr   = $("#recPrice")?.value.trim() || "";
+  const withWarranty = $("#recWarranty")?.checked || false;
+  const extraDays = parseInt($("#recExtraDays")?.value || "0", 10) || 0;
 
-      const addDaysStr = prompt("Additional days (warranty). Put 0 if none:", "0") || "0";
-      const warranty_days = Math.max(0, parseInt(addDaysStr,10) || 0);
-      const priceStr   = prompt("Price (optional):", "") || "";
-      const buyer_link = prompt("Buyer link (optional):", "") || "";
+  if(!product || !account_type){
+    return alert("Product and Account type are required.");
+  }
 
-      // find a stock to decrement
-      setLoading(true);
-      const { data:rows, error } = await supabase
-        .from("stocks")
-        .select("*")
-        .eq("owner_id", getUid())
-        .eq("product", product)
-        .eq("account_type", account_type)
-        .eq("duration_code", duration_code)
-        .eq("archived", false)
-        .gt("quantity", 0)
-        .order("created_at", {ascending:true})
-        .limit(1);
-      if(error){ setLoading(false); return alert("Lookup failed"); }
-      const stock = rows?.[0];
-      if(!stock){ setLoading(false); return alert("No matching stock with quantity > 0."); }
+  setLoading(true);
 
-      // decrement
-      const { error:decErr } = await supabase
-        .from("stocks")
-        .update({ quantity: (stock.quantity||1) - 1 })
-        .eq("id", stock.id)
-        .gt("quantity", 0);
-      if(decErr){ setLoading(false); return alert("Decrement failed"); }
+  // 1) try to find matching stock to decrement (any duration with qty>0; prefer oldest)
+  const { data:rows, error:errFind } = await supabase
+    .from("stocks")
+    .select("*")
+    .eq("owner_id", getUid())
+    .eq("product", product)
+    .eq("account_type", account_type)
+    .eq("archived", false)
+    .gt("quantity", 0)
+    .order("created_at", {ascending:true})
+    .limit(1);
 
-      // create sale
-      const now = new Date();
-      const baseExp = new Date(now.getTime() + durMs(duration_code));
-      const expWithWarranty = new Date(baseExp.getTime() + warranty_days*86400000);
+  if(errFind){ setLoading(false); return alert("Lookup failed"); }
 
-      const { error:insErr } = await supabase.from("sales").insert([{
-        product,
-        account_type,
-        created_at: now.toISOString(),
-        expires_at: expWithWarranty.toISOString(),
-        admin_uuid: getUid(),     // owner performed the hand-out (still recorded)
-        owner_uuid: getUid(),
-        buyer_link: buyer_link.trim() || null,
-        price: priceStr==="" ? null : Number(priceStr),
-        warranty_days
-      }]);
-      setLoading(false);
-      if(insErr){ alert("Insert failed"); console.error(insErr); return; }
+  let duration_code = null, decOk = false, expiresBase;
 
-      toast("Record added");
-      ownerRenderRecords();
-    }
+  if(rows?.length){
+    const s = rows[0];
+    duration_code = s.duration_code;
+    // decrement
+    const { error:decErr } = await supabase
+      .from("stocks")
+      .update({ quantity: (s.quantity||1) - 1 })
+      .eq("id", s.id)
+      .gt("quantity", 0);
+    decOk = !decErr;
+  }
+
+  const now = new Date();
+  // if user provided exact expires, use that; else compute from duration (if any)
+  if(expires_in_ui){
+    expiresBase = new Date(expires_in_ui);
+  }else if(duration_code){
+    const ms = durMs(duration_code);
+    expiresBase = new Date(now.getTime() + ms);
+  }else{
+    // default no duration → same day
+    expiresBase = now;
+  }
+  if(withWarranty && extraDays>0) expiresBase = addDays(expiresBase, extraDays);
+
+  const price = priceStr === "" ? null : Number(priceStr);
+
+  const { error:insErr } = await supabase.from("sales").insert([{
+    product,
+    account_type,
+    created_at: now.toISOString(),
+    expires_at: expiresBase.toISOString(),
+    admin_uuid: getUid(),   // owner performed the hand-out
+    owner_uuid: getUid(),
+    buyer_link,
+    price,
+    warranty_days: withWarranty ? extraDays : 0
+  }]);
+
+  setLoading(false);
+
+  if(insErr){ console.error(insErr); return alert("Insert failed"); }
+
+  toast(decOk ? "Record added (stock decremented)" : "Record added (no matching stock to decrement)");
+  // clear quick form
+  ["recBuyer","recPrice","recExtraDays"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
+  $("#recWarranty")?.checked=false;
+  ownerRenderRecords();
+}
 
     // ---------- OWNER: sales records list/edit/delete
     async function ownerRenderRecords(){
@@ -468,11 +494,35 @@
         return {product,account_type,duration_code,total_qty:qty};
       });
     }
+    let ALL_PRODUCTS = [];     // from loadProducts()
+let ADMIN_AVAIL   = [];    // from adminAvailable()
+let CUR_CAT = null;
+
+function buildCatBar(){
+  const bar = $("#catBar"); if(!bar || !ALL_PRODUCTS.length) return;
+  const cats = [...new Set(ALL_PRODUCTS.map(p => p.category || "Uncategorized"))];
+  bar.innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${c}">${c}</button>`).join("");
+  bar.addEventListener("click", e=>{
+    const b = e.target.closest(".chip"); if(!b) return;
+    CUR_CAT = b.dataset.cat === "All" ? null : b.dataset.cat;
+    $$("#catBar .chip").forEach(x=>x.classList.toggle("active", x===b));
+    adminRenderAvailable();     // re-render table with filter
+    adminFillFormOptions();     // refill 3 selects with filter
+  });
+  // default select = All
+  $$("#catBar .chip")[0]?.classList.add("active");
+}
+
+function filterAvailByCat(rows){
+  if(!CUR_CAT) return rows;
+  const keys = new Set(ALL_PRODUCTS.filter(p=> (p.category||"Uncategorized")===CUR_CAT).map(p=>p.key));
+  return rows.filter(r => keys.has(r.product));
+}
 
     async function adminRenderAvailable(){
       const body=$("#adminStocksBody"); if(!body) return;
       body.innerHTML = `<tr><td colspan="4">Fetching…</td></tr>`;
-      const rows = await adminAvailable();
+      const rows = filterAvailByCat(await adminAvailable());
       body.innerHTML = rows.length
         ? rows.map(r=>`<tr><td>${r.product}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.total_qty}</td></tr>`).join("")
         : `<tr><td colspan="4" class="muted">No data yet</td></tr>`;
@@ -481,7 +531,7 @@
     async function adminFillFormOptions(){
       const prodSel=$("#productSelectAdmin"), typeSel=$("#typeSelectAdmin"), durSel=$("#durSelectAdmin");
       if(!prodSel||!typeSel||!durSel) return;
-      const avail=await adminAvailable(); const uniq=a=>[...new Set(a)];
+      const avail = filterAvailByCat(await adminAvailable());
       const products=uniq(avail.map(r=>r.product));
       prodSel.innerHTML = "";
       products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; prodSel.appendChild(o); });
@@ -503,12 +553,12 @@
       const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
 
       setLoading(true);
-      let res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration });
-      // retry with “other” order if schema cache complains
-      if(res.error && /schema cache|not find the function/i.test(res.error.message)){
-        res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_duration:duration, p_product:product, p_type:type });
-      }
-      setLoading(false);
+      let res = await supabase.rpc("get_account_v2", {
+  p_admin: admin_uuid,
+  p_product: product,
+  p_type: type,
+  p_duration: duration
+});
 
       if(res.error) return alert("get_account failed: " + res.error.message);
       const data = res.data || [];
@@ -647,7 +697,7 @@
 
     // prime options finally
     await primeOptions();
-  }
+    }
 
   document.addEventListener("DOMContentLoaded", boot);
 })();
