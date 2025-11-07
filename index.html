@@ -4,32 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AiaxStock Management</title>
+  <link rel="stylesheet" href="style.css?v=13">
 
-  <!-- Style -->
-  <link rel="stylesheet" href="style.css?v=14">
-
-  <!-- Config + Supabase + App -->
-  
-<script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script defer src="config.js?v=9"></script>
-<script defer src="app.js?v=10"></script>
+  <!-- libs + config + app -->
+  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script defer src="config.js?v=9"></script>
+  <script defer src="app.js?v=11"></script>
 </head>
 
 <body>
-  <!-- Toast + Loading -->
   <div class="loading-overlay hidden">Loading...</div>
   <div class="toast"></div>
 
-  <!-- LOGIN PAGE -->
+  <!-- LOGIN -->
   <section id="viewLogin" class="container">
     <h1>Login</h1>
     <p>Choose a role then <b>type the UUID</b> to continue (no magic link).</p>
 
     <div class="login-columns">
-      <!-- OWNER LOGIN -->
       <div class="login-card">
         <button id="btnLoginOwner" class="btn btn-primary">Login as Owner</button>
-
         <div id="ownerLoginCard" class="account-details hidden">
           <label for="ownerUuid">Owner UUID</label>
           <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off" />
@@ -39,10 +33,8 @@
         </div>
       </div>
 
-      <!-- ADMIN LOGIN -->
       <div class="login-card">
         <button id="btnLoginAdmin" class="btn btn-primary">Login as Admin</button>
-
         <div id="adminLoginCard" class="account-details hidden">
           <label for="adminUuid">Admin UUID</label>
           <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off" />
@@ -52,11 +44,9 @@
         </div>
       </div>
     </div>
-
-    
   </section>
 
-  <!-- OWNER PANEL -->
+  <!-- OWNER -->
   <section id="viewOwner" class="container hidden">
     <div class="topbar">
       <h1>AiaxStock Management — Owner</h1>
@@ -66,7 +56,6 @@
       </div>
     </div>
 
-    <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" data-target="tabAdd">Add Stock</button>
       <button class="tab" data-target="tabStocks">Stocks</button>
@@ -105,6 +94,15 @@
         </label>
       </div>
 
+      <div class="grid-2">
+        <label>Premiumed at (optional)
+          <input id="oaPremiumedAt" type="datetime-local" />
+        </label>
+        <label>Auto-archive if unsold (days, optional)
+          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5" />
+        </label>
+      </div>
+
       <label>Notes
         <input id="oaNotes" placeholder="any notes" />
       </label>
@@ -116,15 +114,30 @@
 
     <!-- Stocks -->
     <div id="tabStocks" class="tab-page hidden">
-      <h2>Current Stocks</h2>
+      <div class="row between">
+        <h2>Current Stocks</h2>
+        <div class="row" style="gap:8px">
+          <button id="btnOwnerRefresh" class="btn btn-outline">Refresh</button>
+          <button id="btnOwnerPurge" class="btn btn-outline">Auto-Archive Now</button>
+          <label style="display:flex;align-items:center;gap:6px">
+            <input id="chkShowArchived" type="checkbox" />
+            <span class="muted">show archived</span>
+          </label>
+        </div>
+      </div>
       <div class="table-wrap">
         <table class="table" id="ownerStocksTable">
           <thead>
             <tr>
+              <th>ID</th>
               <th>Product</th>
               <th>Type</th>
               <th>Duration</th>
               <th>Qty</th>
+              <th>Premiumed</th>
+              <th>Listed</th>
+              <th>Auto-Exp (d)</th>
+              <th>Archived</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -146,18 +159,20 @@
               <th>Created</th>
               <th>Expires</th>
               <th>Admin</th>
-              <th>Warranty</th>
-              <th>Voided</th>
-              <th></th>
+              <th>Buyer link</th>
+              <th>Price</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
+      <div class="actions">
+        <button id="btnExportCSV" class="btn btn-outline">Export CSV</button>
+      </div>
     </div>
   </section>
 
-  <!-- ADMIN PANEL -->
+  <!-- ADMIN -->
   <section id="viewAdmin" class="container hidden">
     <div class="topbar">
       <h1>AiaxStock Management — Admin</h1>
@@ -171,15 +186,10 @@
     <div class="table-wrap">
       <table class="table">
         <thead>
-          <tr>
-            <th>Product</th>
-            <th>Type</th>
-            <th>Duration</th>
-            <th>Qty</th>
-          </tr>
+          <tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr>
         </thead>
         <tbody id="adminStocksBody">
-          <tr><td colspan="4">No data yet</td></tr>
+          <tr><td colspan="4" class="muted">No data yet</td></tr>
         </tbody>
       </table>
     </div>
@@ -196,22 +206,17 @@
         <select id="durSelectAdmin"></select>
       </label>
     </div>
-
     <div class="actions">
       <button id="getAccountBtn" class="btn btn-primary">Get Account</button>
     </div>
+
+    <div id="adminCreds"></div>
 
     <h2>My Buyers Record</h2>
     <div class="table-wrap">
       <table class="table" id="adminRecordsTable">
         <thead>
-          <tr>
-            <th>ID</th>
-            <th>Product</th>
-            <th>Type</th>
-            <th>Created</th>
-            <th>Expires</th>
-          </tr>
+          <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th></tr>
         </thead>
         <tbody></tbody>
       </table>
