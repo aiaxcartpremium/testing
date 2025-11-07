@@ -639,11 +639,10 @@ function filterAvailByCat(rows){
       $("#viewAdmin")?.classList.add("hidden");
     }
 
-    // ensure button type=button (avoid form submit refresh)
-    ["#btnLoginOwner","#btnLoginAdmin","#continueOwner","#continueAdmin",
-     "#oaAddBtn","#getAccountBtn","#btnOwnerRefresh","#btnOwnerPurge",
-     "#btnAddRecord","#btnExportCSV"].forEach(s=>{const b=$(s); if(b) b.type="button";});
-
+    ["#btnLoginOwner", "#btnLoginAdmin"].forEach(sel => {
+  const el = document.querySelector(sel);
+  if (el) el.setAttribute("type", "button");
+});
     // login
     const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
     const cardOwner=$("#ownerLoginCard"), cardAdmin=$("#adminLoginCard");
