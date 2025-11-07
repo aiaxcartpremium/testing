@@ -135,7 +135,23 @@ input:focus, select:focus{ outline:none; border-color:#f2a0ba; box-shadow:0 0 0 
 
 /* Table action buttons */
 .rem1{ white-space:nowrap; padding:6px 10px; border-radius:999px; }
-
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.chips .chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #0002;
+  background: #fff;
+  cursor: pointer;
+}
+.chips .chip.active {
+  background: #000;
+  color: #fff;
+}
 /* Minor spacing polish */
 #viewOwner .tab-page + .tab-page,
 #viewAdmin h2 + .table-wrap,
