@@ -1,8 +1,9 @@
-/* app.js — AiaxStock (v2025-11-07.1 “admin categories + owner records”) */
+/* app.js — AiaxStock (v2025-11-07.2 “admin categories + owner records, fixed order”) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
   const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+  const uniq = (a) => [...new Set(a)];
 
   // ── runtime helpers
   const norm = s => (s||"").replace(/\s+/g,"").toLowerCase();
@@ -11,7 +12,7 @@
   const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
   const addDays = (date, days) => new Date(date.getTime() + (days||0)*86400000);
 
-  // ── session (simple)
+  // session
   const SKEY_ROLE = "aiax.role";
   const SKEY_UID  = "aiax.uid";
   const setSess   = (role, uid) => { sessionStorage.setItem(SKEY_ROLE, role); sessionStorage.setItem(SKEY_UID, uid); };
@@ -19,7 +20,7 @@
   const getUid    = () => sessionStorage.getItem(SKEY_UID);
   const clearSess = () => { sessionStorage.removeItem(SKEY_ROLE); sessionStorage.removeItem(SKEY_UID); };
 
-  // convert duration code to ms (months≈30d except 12m=365d)
+  // duration utils
   const durMs = (code) => {
     if (!code) return 0;
     if (/^\d+d$/.test(code)) return parseInt(code,10)*86400000;
@@ -34,6 +35,11 @@
     const supabase = window.supabase.createClient(APP.url, APP.key);
     const isOwner = uid => norm(uid) === norm(APP.ownerId);
     const isAdmin = uid => (APP.admins||[]).map(norm).includes(norm(uid));
+
+    // keep these BEFORE any use
+    let ALL_PRODUCTS = [];    // from loadProducts()
+    let ADMIN_AVAIL  = [];    // optional cache
+    let CUR_CAT      = null;
 
     // ---------- OPTIONS (products, types, durations)
     const fillSelect = (sel, items) => {
@@ -58,7 +64,6 @@
         if (error) throw error;
         if (data?.length) return data; // [{key,label,category}]
       } catch {}
-      // fallback from APP.PRODUCTS -> default category 'Entertainment'
       return (APP.PRODUCTS || []).map(x =>
         typeof x === "string" ? { key: x.toLowerCase(), label: x, category: "Entertainment" } : x
       );
@@ -72,67 +77,46 @@
       return APP.DURATIONS || [];
     }
 
+    // chips UI
+    function buildCatBar(){
+      const bar = $("#catBar"); if(!bar || !ALL_PRODUCTS.length) return;
+      const cats = uniq(ALL_PRODUCTS.map(p => p.category || "Uncategorized"));
+      bar.innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${c}">${c}</button>`).join("");
+      bar.addEventListener("click", e=>{
+        const b = e.target.closest(".chip"); if(!b) return;
+        CUR_CAT = b.dataset.cat === "All" ? null : b.dataset.cat;
+        $$("#catBar .chip").forEach(x=>x.classList.toggle("active", x===b));
+        adminRefreshAll(); // re-render and refill form
+      });
+      $$("#catBar .chip")[0]?.classList.add("active");
+    }
+    function filterAvailByCat(rows){
+      if(!CUR_CAT) return rows;
+      const keys = new Set(ALL_PRODUCTS.filter(p=> (p.category||"Uncategorized")===CUR_CAT).map(p=>p.key));
+      return rows.filter(r => keys.has(r.product));
+    }
+
     async function primeOptions(){
-      const [prods, types, durs] = await Promise.all([loadProducts(), loadAccountTypes(), loadDurations()]);
-ALL_PRODUCTS = prods;       // <— save
-buildCatBar();              // <— create the chips
-  
-      // owner defaults
+      // initial placeholders
       fillSelect("#productSelectOwner",[["Loading…",""]]);
       fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
       fillSelect("#durSelectOwner",  APP.DURATIONS || []);
-
-      // admin defaults
-      fillSelect("#catSelectAdmin",   [["Loading…",""]]);
       fillSelect("#productSelectAdmin",[["Loading…",""]]);
       fillSelect("#typeSelectAdmin",  []);
       fillSelect("#durSelectAdmin",   []);
 
-      const [prods,types,durs] = await Promise.all([
-        loadProducts(), loadAccountTypes(), loadDurations()
-      ]);
+      // fetch once
+      const [prods, types, durs] = await Promise.all([loadProducts(), loadAccountTypes(), loadDurations()]);
+      ALL_PRODUCTS = prods;
+      buildCatBar();
 
-      // owner selects (product list label shown, value=key)
+      // owner selects
       if (prods.length) fillSelect("#productSelectOwner", prods.map(r=>[r.label, r.key]));
       if (types.length) fillSelect("#typeSelectOwner", types);
       if (durs.length)  fillSelect("#durSelectOwner",  durs);
 
-      // admin category -> product -> type/dur cascade
-      const catSel = $("#catSelectAdmin");
-      const prodSel = $("#productSelectAdmin");
-      const typeSel = $("#typeSelectAdmin");
-      const durSel  = $("#durSelectAdmin");
-
-      const cats = [...new Set(prods.map(r => r.category || "Uncategorized"))];
-
-      if (!catSel) { // safety if HTML changed
-        fillSelect("#productSelectAdmin", prods.map(r=>[r.label,r.key]));
-        prodSel?.addEventListener("change", refreshTypeDur);
-        refreshTypeDur();
-        return;
-      }
-
-      fillSelect("#catSelectAdmin", cats.length ? cats : [["(none)",""]]);
-
-      function refreshProducts(){
-        const c = catSel.value;
-        const list = prods.filter(r => (r.category||"Uncategorized") === c);
-        fillSelect("#productSelectAdmin", list.map(r=>[r.label,r.key]));
-        refreshTypeDur();
-      }
-      function refreshTypeDur(){
-        const pkey = prodSel?.value;
-        adminAvailable().then(av => {
-          const sub = av.filter(r=>r.product===pkey);
-          const uniq = a => [...new Set(a)];
-          fillSelect("#typeSelectAdmin", uniq(sub.map(r=>r.account_type)));
-          fillSelect("#durSelectAdmin",  uniq(sub.map(r=>r.duration_code)));
-        });
-      }
-      catSel.addEventListener("change", refreshProducts);
-      prodSel?.addEventListener("change", refreshTypeDur);
-
-      if (cats.length){ catSel.value = cats[0]; refreshProducts(); }
+      // admin selects (cascades will be filled from availability later)
+      await adminFillFormOptions(); // uses availability + category
     }
 
     // ---------- OWNER: add stock
@@ -283,85 +267,78 @@ buildCatBar();              // <— create the chips
 
     // ---------- OWNER: quick “Add Record”
     async function ownerAddRecord(){
-  const product = $("#recProduct")?.value.trim();
-  const account_type = $("#recType")?.value.trim();
-  const expires_in_ui = $("#recExpires")?.value.trim(); // optional direct datetime
-  const buyer_link = $("#recBuyer")?.value.trim() || null;
-  const priceStr   = $("#recPrice")?.value.trim() || "";
-  const withWarranty = $("#recWarranty")?.checked || false;
-  const extraDays = parseInt($("#recExtraDays")?.value || "0", 10) || 0;
+      const product = $("#recProduct")?.value.trim();
+      const account_type = $("#recType")?.value.trim();
+      const expires_in_ui = $("#recExpires")?.value.trim(); // optional direct datetime
+      const buyer_link = $("#recBuyer")?.value.trim() || null;
+      const priceStr   = $("#recPrice")?.value.trim() || "";
+      const withWarranty = $("#recWarranty")?.checked || false;
+      const extraDays = parseInt($("#recExtraDays")?.value || "0", 10) || 0;
 
-  if(!product || !account_type){
-    return alert("Product and Account type are required.");
-  }
+      if(!product || !account_type){
+        return alert("Product and Account type are required.");
+      }
 
-  setLoading(true);
+      setLoading(true);
 
-  // 1) try to find matching stock to decrement (any duration with qty>0; prefer oldest)
-  const { data:rows, error:errFind } = await supabase
-    .from("stocks")
-    .select("*")
-    .eq("owner_id", getUid())
-    .eq("product", product)
-    .eq("account_type", account_type)
-    .eq("archived", false)
-    .gt("quantity", 0)
-    .order("created_at", {ascending:true})
-    .limit(1);
+      // find a matching stock to decrement (any duration; prefer oldest)
+      const { data:rows, error:errFind } = await supabase
+        .from("stocks").select("*")
+        .eq("owner_id", getUid())
+        .eq("product", product)
+        .eq("account_type", account_type)
+        .eq("archived", false)
+        .gt("quantity", 0)
+        .order("created_at", {ascending:true})
+        .limit(1);
+      if(errFind){ setLoading(false); return alert("Lookup failed"); }
 
-  if(errFind){ setLoading(false); return alert("Lookup failed"); }
+      let duration_code = null, decOk = false, expiresBase;
 
-  let duration_code = null, decOk = false, expiresBase;
+      if(rows?.length){
+        const s = rows[0];
+        duration_code = s.duration_code;
+        const { error:decErr } = await supabase
+          .from("stocks")
+          .update({ quantity: (s.quantity||1) - 1 })
+          .eq("id", s.id)
+          .gt("quantity", 0);
+        decOk = !decErr;
+      }
 
-  if(rows?.length){
-    const s = rows[0];
-    duration_code = s.duration_code;
-    // decrement
-    const { error:decErr } = await supabase
-      .from("stocks")
-      .update({ quantity: (s.quantity||1) - 1 })
-      .eq("id", s.id)
-      .gt("quantity", 0);
-    decOk = !decErr;
-  }
+      const now = new Date();
+      if(expires_in_ui){
+        expiresBase = new Date(expires_in_ui);
+      }else if(duration_code){
+        expiresBase = new Date(now.getTime() + durMs(duration_code));
+      }else{
+        expiresBase = now;
+      }
+      if(withWarranty && extraDays>0) expiresBase = addDays(expiresBase, extraDays);
 
-  const now = new Date();
-  // if user provided exact expires, use that; else compute from duration (if any)
-  if(expires_in_ui){
-    expiresBase = new Date(expires_in_ui);
-  }else if(duration_code){
-    const ms = durMs(duration_code);
-    expiresBase = new Date(now.getTime() + ms);
-  }else{
-    // default no duration → same day
-    expiresBase = now;
-  }
-  if(withWarranty && extraDays>0) expiresBase = addDays(expiresBase, extraDays);
+      const price = priceStr === "" ? null : Number(priceStr);
 
-  const price = priceStr === "" ? null : Number(priceStr);
+      const { error:insErr } = await supabase.from("sales").insert([{
+        product,
+        account_type,
+        created_at: now.toISOString(),
+        expires_at: expiresBase.toISOString(),
+        admin_uuid: getUid(),
+        owner_uuid: getUid(),
+        buyer_link,
+        price,
+        warranty_days: withWarranty ? extraDays : 0
+      }]);
 
-  const { error:insErr } = await supabase.from("sales").insert([{
-    product,
-    account_type,
-    created_at: now.toISOString(),
-    expires_at: expiresBase.toISOString(),
-    admin_uuid: getUid(),   // owner performed the hand-out
-    owner_uuid: getUid(),
-    buyer_link,
-    price,
-    warranty_days: withWarranty ? extraDays : 0
-  }]);
+      setLoading(false);
 
-  setLoading(false);
+      if(insErr){ console.error(insErr); return alert("Insert failed"); }
 
-  if(insErr){ console.error(insErr); return alert("Insert failed"); }
-
-  toast(decOk ? "Record added (stock decremented)" : "Record added (no matching stock to decrement)");
-  // clear quick form
-  ["recBuyer","recPrice","recExtraDays"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
-  $("#recWarranty")?.checked=false;
-  ownerRenderRecords();
-}
+      toast(decOk ? "Record added (stock decremented)" : "Record added (no matching stock to decrement)");
+      ["recBuyer","recPrice","recExtraDays"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
+      $("#recWarranty")?.checked=false;
+      ownerRenderRecords();
+    }
 
     // ---------- OWNER: sales records list/edit/delete
     async function ownerRenderRecords(){
@@ -404,7 +381,7 @@ buildCatBar();              // <— create the chips
         </tr>
       `).join("");
 
-      // wire: edit
+      // edit
       $$(".btnRecEdit", tbody).forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const tr = btn.closest("tr"); const id = tr.dataset.id;
@@ -421,7 +398,6 @@ buildCatBar();              // <— create the chips
           const priceIn = prompt("Price (blank to clear):", cur.price) || "";
           const price   = priceIn ? Number(priceIn) : null;
 
-          // warranty extend on edit
           const addDaysStr = prompt("Add warranty days (0 to keep):", "0") || "0";
           const extraDays  = parseInt(addDaysStr,10) || 0;
           let expires = cur.expires_at ? new Date(cur.expires_at) : new Date();
@@ -440,7 +416,7 @@ buildCatBar();              // <— create the chips
         });
       });
 
-      // wire: delete
+      // delete
       $$(".btnRecDel", tbody).forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const tr = btn.closest("tr"); const id = tr.dataset.id;
@@ -494,30 +470,6 @@ buildCatBar();              // <— create the chips
         return {product,account_type,duration_code,total_qty:qty};
       });
     }
-    let ALL_PRODUCTS = [];     // from loadProducts()
-let ADMIN_AVAIL   = [];    // from adminAvailable()
-let CUR_CAT = null;
-
-function buildCatBar(){
-  const bar = $("#catBar"); if(!bar || !ALL_PRODUCTS.length) return;
-  const cats = [...new Set(ALL_PRODUCTS.map(p => p.category || "Uncategorized"))];
-  bar.innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${c}">${c}</button>`).join("");
-  bar.addEventListener("click", e=>{
-    const b = e.target.closest(".chip"); if(!b) return;
-    CUR_CAT = b.dataset.cat === "All" ? null : b.dataset.cat;
-    $$("#catBar .chip").forEach(x=>x.classList.toggle("active", x===b));
-    adminRenderAvailable();     // re-render table with filter
-    adminFillFormOptions();     // refill 3 selects with filter
-  });
-  // default select = All
-  $$("#catBar .chip")[0]?.classList.add("active");
-}
-
-function filterAvailByCat(rows){
-  if(!CUR_CAT) return rows;
-  const keys = new Set(ALL_PRODUCTS.filter(p=> (p.category||"Uncategorized")===CUR_CAT).map(p=>p.key));
-  return rows.filter(r => keys.has(r.product));
-}
 
     async function adminRenderAvailable(){
       const body=$("#adminStocksBody"); if(!body) return;
@@ -531,10 +483,13 @@ function filterAvailByCat(rows){
     async function adminFillFormOptions(){
       const prodSel=$("#productSelectAdmin"), typeSel=$("#typeSelectAdmin"), durSel=$("#durSelectAdmin");
       if(!prodSel||!typeSel||!durSel) return;
+
       const avail = filterAvailByCat(await adminAvailable());
       const products=uniq(avail.map(r=>r.product));
+
       prodSel.innerHTML = "";
       products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; prodSel.appendChild(o); });
+
       function refresh(){
         const p=prodSel.value; const sub=avail.filter(r=>r.product===p);
         typeSel.innerHTML=""; durSel.innerHTML="";
@@ -554,11 +509,12 @@ function filterAvailByCat(rows){
 
       setLoading(true);
       let res = await supabase.rpc("get_account_v2", {
-  p_admin: admin_uuid,
-  p_product: product,
-  p_type: type,
-  p_duration: duration
-});
+        p_admin: admin_uuid,
+        p_product: product,
+        p_type: type,
+        p_duration: duration
+      });
+      setLoading(false);
 
       if(res.error) return alert("get_account failed: " + res.error.message);
       const data = res.data || [];
@@ -591,9 +547,7 @@ function filterAvailByCat(rows){
             <td>${r.account_type ?? ""}</td>
             <td>${fmtDT(r.created_at)}</td>
             <td>${fmtDT(r.expires_at)}</td>
-            <td>
-              <button class="btn-outline btnEditRec">Edit</button>
-            </td>
+            <td><button class="btn-outline btnEditRec">Edit</button></td>
           </tr>`).join("");
 
         $$(".btnEditRec", tbody).forEach(b=>b.addEventListener("click", async ()=>{
@@ -623,14 +577,14 @@ function filterAvailByCat(rows){
       $("#viewLogin")?.classList.add("hidden");
       $("#viewAdmin")?.classList.add("hidden");
       $("#viewOwner")?.classList.remove("hidden");
-      $("#goToOwner")?.classList.add("hidden");                 // hide "go to owner" when already owner
+      $("#goToOwner")?.classList.add("hidden");
       $("#goToAdmin")?.classList.toggle("hidden", getRole()!=="owner");
     }
     function showAdmin(){
       $("#viewLogin")?.classList.add("hidden");
       $("#viewOwner")?.classList.add("hidden");
       $("#viewAdmin")?.classList.remove("hidden");
-      $("#goToOwner")?.classList.toggle("hidden", getRole()!=="owner"); // only owner can see this
+      $("#goToOwner")?.classList.toggle("hidden", getRole()!=="owner");
       $("#goToAdmin")?.classList.add("hidden");
     }
     function showLogin(){
@@ -639,10 +593,14 @@ function filterAvailByCat(rows){
       $("#viewAdmin")?.classList.add("hidden");
     }
 
-    ["#btnLoginOwner", "#btnLoginAdmin"].forEach(sel => {
-  const el = document.querySelector(sel);
-  if (el) el.setAttribute("type", "button");
-});
+    // Make sure these are not submit buttons
+    [
+      "#btnLoginOwner","#btnLoginAdmin",
+      "#continueOwner","#continueAdmin",
+      "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
+      "#btnAddRecord","#getAccountBtn"
+    ].forEach(sel => { const el = $(sel); if (el) el.type = "button"; });
+
     // login
     const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
     const cardOwner=$("#ownerLoginCard"), cardAdmin=$("#adminLoginCard");
@@ -684,16 +642,7 @@ function filterAvailByCat(rows){
     $("#oaAddBtn")?.addEventListener("click", ownerAddStock);
     $("#btnAddRecord")?.addEventListener("click", ownerAddRecord);
     $("#getAccountBtn")?.addEventListener("click", adminGetAccount);
-// Ensure every clickable button is type="button"
-[
-  "#btnLoginOwner","#btnLoginAdmin",
-  "#continueOwner","#continueAdmin",
-  "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
-  "#btnAddRecord","#getAccountBtn"
-].forEach(sel => {
-  const el = $(sel);
-  if (el) el.type = "button";
-});
+
     // auto-view based on session
     const r=getRole(), u=getUid();
     if(r && u){
@@ -702,12 +651,10 @@ function filterAvailByCat(rows){
     } else {
       showLogin();
     }
-let ALL_PRODUCTS = [];   // product list from loadProducts
-let ADMIN_AVAIL = [];    // cached availability (optional)
-let CUR_CAT = null;
+
     // prime options finally
     await primeOptions();
-    }
+  }
 
   document.addEventListener("DOMContentLoaded", boot);
 })();
