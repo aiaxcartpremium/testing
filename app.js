@@ -183,11 +183,11 @@
 
   // ── OWNER: list (raw for per-row edit/remove), purge
   function ownerStocksSelect(showArchived){
-    return supabase.from("stocks")
-      .select("id,product,account_type,duration_code,quantity,premiumed_at,created_at,auto_expire_days,archived,owner_uuid,email,password,profile_name,pin,notes")
-      .eq("owner_uuid", getUid())
-      .eq("archived", !!showArchived ? true : false);
-  }
+  return supabase.from("stocks")
+    .select("id,product,account_type,duration_code,quantity,premiumed_at,created_at,auto_expire_days,archived,owner_id")
+    .eq("owner_id", getUid())          // <— was owner_uuid
+    .eq("archived", !!showArchived ? true : false);
+}
 
   async function ownerRenderStocks(){
     const tbody = $("#ownerStocksTable tbody"); if(!tbody) return;
@@ -429,10 +429,17 @@
       // create a minimal sales record
       const now = new Date();
       const expires_at = new Date(now.getTime() + durMs(duration)).toISOString();
-      await supabase.from("sales").insert([{
-        product, account_type:type, created_at: now.toISOString(), expires_at,
-        admin_uuid, owner_uuid: row.owner_uuid, buyer_link: null, price: null
-      }]);
+      // after decrementing, when inserting into sales:
+await supabase.from("sales").insert([{
+  product,
+  account_type: type,
+  created_at: now.toISOString(),
+  expires_at,
+  admin_uuid,
+  owner_uuid: row.owner_id,   // <— use row.owner_id since stocks has owner_id
+  buyer_link: null,
+  price: null
+}]);
 
       // show creds
       const out = $("#adminCreds");
