@@ -684,7 +684,16 @@ function filterAvailByCat(rows){
     $("#oaAddBtn")?.addEventListener("click", ownerAddStock);
     $("#btnAddRecord")?.addEventListener("click", ownerAddRecord);
     $("#getAccountBtn")?.addEventListener("click", adminGetAccount);
-
+// Ensure every clickable button is type="button"
+[
+  "#btnLoginOwner","#btnLoginAdmin",
+  "#continueOwner","#continueAdmin",
+  "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
+  "#btnAddRecord","#getAccountBtn"
+].forEach(sel => {
+  const el = $(sel);
+  if (el) el.type = "button";
+});
     // auto-view based on session
     const r=getRole(), u=getUid();
     if(r && u){
@@ -693,7 +702,9 @@ function filterAvailByCat(rows){
     } else {
       showLogin();
     }
-
+let ALL_PRODUCTS = [];   // product list from loadProducts
+let ADMIN_AVAIL = [];    // cached availability (optional)
+let CUR_CAT = null;
     // prime options finally
     await primeOptions();
     }
