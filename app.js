@@ -1,8 +1,9 @@
-
+/* app.js — AiaxStock (v2025-11-07, “product + owner_id only”) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
   const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+  const once = (el, ev, fn) => el && el.addEventListener(ev, fn, { once:true });
 
   // ── config & supabase
   const APP = window.APP || {};
@@ -23,43 +24,48 @@
   const isAdmin = uid => (APP.admins||[]).map(norm).includes(norm(uid));
   const toast = (msg) => { const t=$(".toast"); if(!t) return; t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); };
   const setLoading = (on) => { const L=$(".loading-overlay"); if(!L) return; L.classList.toggle("hidden", !on); L.style.pointerEvents="none"; };
-  const fillSelect = (sel, items) => { const el=$(sel); if(!el) return; el.innerHTML=""; for(const it of items){ let label,value; if(Array.isArray(it))[label,value]=it; else if(typeof it==="string")(label=value=it); else if(it&&it.name)(label=value=it.name); else continue; const o=document.createElement("option"); o.value=value; o.textContent=label; el.appendChild(o);} };
+  const fillSelect = (sel, items) => {
+    const el=$(sel); if(!el) return;
+    el.innerHTML="";
+    for(const it of items){
+      let label,value;
+      if(Array.isArray(it))[label,value]=it;          // [label,value]
+      else if(typeof it==="string")(label=value=it);  // "value"
+      else if(it && it.label != null && it.key != null){ label=it.label; value=it.key; }
+      else if(it && it.name != null){ label=value=it.name; }
+      else continue;
+      const o=document.createElement("option"); o.value=value; o.textContent=label; el.appendChild(o);
+    }
+  };
   const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
 
-  // ── duration (months≈30d except 12m = 365d)
+  // convert duration code to ms (months≈30d except 12m=365d)
   const durMs = (code) => {
     if (!code) return 0;
     if (/^\d+d$/.test(code)) return parseInt(code,10)*86400000;
-    if (/^\d+m$/.test(code)) { const m=parseInt(code,10); return (m===12?365:m*30)*86400000; }
+    if (/^\d+m$/.test(code)) { const m=parseInt(code,10); return (m===12?365:30*m)*86400000; }
     return 0;
   };
 
-  // ── product key <-> label cache
-  const productsMap = new Map();     // key -> label
-  const labelFromKey = k => productsMap.get(k) || k;
-
   // ── options
   async function loadProducts() {
+    // Try structured (key,label). Fallback to APP.PRODUCTS (array of [label,key] or strings)
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("key,label")
-        .order("label");
-      if (error) throw error;
-      (data||[]).forEach(r => productsMap.set(r.key, r.label));
-      // for fillSelect we need [label, value]; value must be the key
-      return (data||[]).map(r => [r.label, r.key]);
-    } catch {
-      // fallback if you hardcode APP.PRODUCTS as [{key,label},...]
-      (APP.PRODUCTS||[]).forEach(r => productsMap.set(r.key, r.label));
-      return (APP.PRODUCTS||[]).map(r => [r.label, r.key]);
-    }
+      const {data,error} = await supabase.from("products").select("key,label").order("label");
+      if(error) throw error;
+      if(data?.length) return data.map(r=>[r.label, r.key]); // UI shows label, value=key
+    } catch {}
+    // Fallbacks the app already had
+    const fallback = (APP.PRODUCTS || []).map(x => Array.isArray(x)?x:[x,x]);
+    return fallback;
   }
   async function loadAccountTypes() {
-    try { const {data,error}=await supabase.from("account_types").select("label").order("label"); if(error) throw error; return (data||[]).map(r=>r.label); } catch { return APP.ACCOUNT_TYPES||[]; }
+    try { const {data,error} = await supabase.from("account_types").select("label").order("label"); if(error) throw error; if(data?.length) return data.map(r=>r.label); } catch {}
+    return APP.ACCOUNT_TYPES || [];
   }
   async function loadDurations() {
-    try { const {data,error}=await supabase.from("durations").select("label,code,seq").order("seq",{ascending:true}); if(error) throw error; return (data||[]).map(r=>[r.label,r.code]); } catch { return APP.DURATIONS||[]; }
+    try { const {data,error} = await supabase.from("durations").select("label,code,seq").order("seq",{ascending:true}); if(error) throw error; if(data?.length) return data.map(r=>[r.label,r.code]); } catch {}
+    return APP.DURATIONS || [];
   }
   async function primeOptions(){
     fillSelect("#productSelectOwner",[["Loading…",""]]);
@@ -70,15 +76,16 @@
     fillSelect("#durSelectAdmin", APP.DURATIONS || []);
 
     const [prods,types,durs]=await Promise.all([loadProducts(),loadAccountTypes(),loadDurations()]);
+
     if(prods.length){ fillSelect("#productSelectOwner",prods); fillSelect("#productSelectAdmin",prods); }
     if(types.length){ fillSelect("#typeSelectOwner",types); fillSelect("#typeSelectAdmin",types); }
     if(durs.length){ fillSelect("#durSelectOwner",durs); fillSelect("#durSelectAdmin",durs); }
   }
 
-  // ── OWNER: add stock
+  // ─── OWNER: add stock (insert into stocks) ─────────
   async function ownerAddStock() {
-    const owner_id     = getUid();                               // DB column
-    const product_key  = $('#productSelectOwner')?.value || '';  // value is key
+    const owner_id     = getUid(); // ← table column is owner_id
+    const product      = $('#productSelectOwner')?.value || '';   // value is product key
     const account_type = $('#typeSelectOwner')?.value || '';
     const duration_code= $('#durSelectOwner')?.value || '';
     const quantity     = parseInt($('#oaQty')?.value || '1', 10);
@@ -88,47 +95,57 @@
     const profile_name = ($('#oaProfile')?.value || '').trim();
     const pin          = ($('#oaPin')?.value || '').trim();
     const notes        = ($('#oaNotes')?.value || '').trim();
+
     const premiumed_at_raw = ($('#oaPremiumed')?.value || '').trim();
     const auto_expire_raw  = ($('#oaAutoExpire')?.value || '').trim();
 
-    if (!product_key)   return alert('Select a product');
+    if (!product)       return alert('Select a product');
     if (!account_type)  return alert('Select account type');
     if (!duration_code) return alert('Select duration');
     if (!quantity || quantity < 1) return alert('Quantity must be at least 1');
 
-    const payload = { owner_id, product_key, account_type, duration_code, quantity };
+    const payload = {
+      owner_id,           // IMPORTANT: matches your table
+      product,            // store the product key in the "product" column
+      account_type,
+      duration_code,
+      quantity
+    };
     if (email)        payload.email = email;
     if (password)     payload.password = password;
     if (profile_name) payload.profile_name = profile_name;
     if (pin)          payload.pin = pin;
     if (notes)        payload.notes = notes;
     if (premiumed_at_raw) {
-      const d = new Date(premiumed_at_raw);
-      if (!isNaN(d)) payload.premiumed_at = d.toISOString();
+      const d = new Date(premiumed_at_raw); if (!isNaN(d)) payload.premiumed_at = d.toISOString();
     }
-    if (auto_expire_raw && !isNaN(parseInt(auto_expire_raw,10))) {
-      payload.auto_expire_days = parseInt(auto_expire_raw,10);
-    }
+    if (auto_expire_raw && !isNaN(parseInt(auto_expire_raw, 10))) payload.auto_expire_days = parseInt(auto_expire_raw, 10);
 
     setLoading(true);
-    const { error } = await supabase.from('stocks').insert([payload]);
+    let { error } = await supabase.from('stocks').insert([payload]);
+    // defensive retry if cache complains
+    if (error && /schema cache/i.test(error.message)) {
+      ({ error } = await supabase.from('stocks').insert([{
+        owner_id, product, account_type, duration_code, quantity,
+        email: payload.email, password: payload.password, profile_name: payload.profile_name,
+        pin: payload.pin, notes: payload.notes, premiumed_at: payload.premiumed_at,
+        auto_expire_days: payload.auto_expire_days
+      }]));
+    }
     setLoading(false);
 
-    if (error) { console.error(error); alert('Add stock failed: ' + error.message); return; }
+    if (error) { console.error('[stocks.insert] failed:', error); alert('Add stock failed: ' + (error.message || JSON.stringify(error))); return; }
+
     toast('Stock added');
-
-    // clear inputs
     $('#oaQty').value = '1';
-    ['oaEmail','oaPass','oaProfile','oaPin','oaNotes','oaPremiumed','oaAutoExpire']
-      .forEach(id => { const el = $('#'+id); if (el) el.value = ''; });
-
+    ['oaEmail','oaPass','oaProfile','oaPin','oaNotes','oaPremiumed','oaAutoExpire'].forEach(id => { const el = $('#'+id); if (el) el.value = ''; });
     await ownerRenderStocks();
   }
 
-  // ── OWNER: list / edit / archive
+  // ── OWNER: list (raw for per-row edit/remove), purge
   function ownerStocksSelect(showArchived){
     return supabase.from("stocks")
-      .select("id,product_key,account_type,duration_code,quantity,premiumed_at,created_at,auto_expire_days,archived,owner_id")
+      .select("id,product,account_type,duration_code,quantity,premiumed_at,created_at,auto_expire_days,archived,owner_id")
       .eq("owner_id", getUid())
       .eq("archived", !!showArchived ? true : false);
   }
@@ -138,14 +155,14 @@
     const showArchived = $("#chkShowArchived")?.checked || false;
 
     tbody.innerHTML = `<tr><td colspan="10">Loading…</td></tr>`;
-    const { data, error } = await ownerStocksSelect(showArchived).order("created_at",{ascending:false});
+    const { data, error } = await ownerStocksSelect(showArchived).order("created_at", {ascending:false});
     if(error){ console.error(error); tbody.innerHTML = `<tr><td colspan="10">Failed to load.</td></tr>`; return; }
     if(!data?.length){ tbody.innerHTML = `<tr><td colspan="10" class="muted">No stocks${showArchived?" (archived)":""}.</td></tr>`; return; }
 
     tbody.innerHTML = data.map(r=>`
       <tr data-id="${r.id}">
         <td>${r.id}</td>
-        <td>${labelFromKey(r.product_key)}</td>
+        <td>${r.product}</td>
         <td>${r.account_type}</td>
         <td>${r.duration_code}</td>
         <td>${r.quantity}</td>
@@ -186,7 +203,9 @@
       const auto_expire_days = auto_days_str ? parseInt(auto_days_str,10) : null;
 
       setLoading(true);
-      const { error } = await supabase.from("stocks").update({ quantity, premiumed_at, auto_expire_days }).eq("id", id);
+      const { error } = await supabase.from("stocks")
+        .update({ quantity, premiumed_at, auto_expire_days })
+        .eq("id", id);
       setLoading(false);
       if(error){ alert("Edit failed"); console.error(error); return; }
       ownerRenderStocks();
@@ -206,7 +225,7 @@
     }));
   }
 
-  // purge (unchanged except owner_id)
+  // purge: archive unsold whose age>auto_expire_days
   async function ownerPurgeExpired(){
     const { data, error } = await supabase
       .from("stocks")
@@ -220,16 +239,20 @@
     if(!toArchive.length){ toast("Nothing to archive"); return; }
     const { error:err2 } = await supabase.from("stocks").update({ archived:true }).in("id", toArchive);
     if(err2){ console.error(err2); alert("Auto-archive failed"); return; }
-    toast(`Archived ${toArchive.length}`); ownerRenderStocks();
+    toast(`Archived ${toArchive.length}`);
+    ownerRenderStocks();
   }
 
-  // OWNER: records (kept as-is; your RPC uses owner UUIDs)
+  // OWNER: records (and CSV export)
   async function ownerRenderRecords(){
     const tbody = $("#ownerRecordsTable tbody"); if(!tbody) return;
     tbody.innerHTML = `<tr><td colspan="8">Loading…</td></tr>`;
     let rows = [];
     try { const {data,error}=await supabase.rpc("list_my_sales",{ p_owner:getUid() }); if(error) throw error; rows=data||[]; }
-    catch { const {data}=await supabase.from("sales").select("id,product,account_type,created_at,expires_at,price,buyer_link,admin_uuid,owner_uuid").eq("owner_uuid",getUid()).order("id",{ascending:false}).limit(300); rows=data||[]; }
+    catch {
+      const {data}=await supabase.from("sales").select("id,product,account_type,created_at,expires_at,price,buyer_link,admin_uuid,owner_uuid").eq("owner_uuid",getUid()).order("id",{ascending:false}).limit(300);
+      rows=data||[];
+    }
     if(!rows.length){ tbody.innerHTML = `<tr><td colspan="8" class="muted">No records yet.</td></tr>`; return; }
     tbody.innerHTML = rows.map(r=>`
       <tr>
@@ -243,104 +266,82 @@
         <td>${r.price ?? ""}</td>
       </tr>
     `).join("");
+
+    $("#btnExportCSV")?.addEventListener("click", ()=>{
+      if(!rows.length) return;
+      const head = Object.keys(rows[0]);
+      const esc = v => v==null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v);
+      const csv = [head.join(","), ...rows.map(r=>head.map(k=>esc(r[k])).join(","))].join("\n");
+      const blob = new Blob([csv], {type:"text/csv"}); const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download="owner_records.csv"; a.click();
+      URL.revokeObjectURL(url);
+    }, { once:true });
   }
 
-  // ── ADMIN: available list / form options (group by product_key)
+  // ── ADMIN: available list / form options (via view or fallback aggregate)
   async function adminAvailable(){
-    // Try a view if you created one; else compute client-side
     try{
-      const {data,error} = await supabase
-        .from("stocks")
-        .select("product_key,account_type,duration_code,quantity,archived")
-        .gt("quantity",0).eq("archived",false);
-      if(error) throw error;
-      const map=new Map();
-      for(const r of data){
-        const k=`${r.product_key}|${r.account_type}|${r.duration_code}`;
-        map.set(k,(map.get(k)||0)+(r.quantity||0));
-      }
-      return [...map.entries()].map(([k,qty])=>{
-        const [product_key,account_type,duration_code]=k.split("|");
-        return {product_key,account_type,duration_code,total_qty:qty};
-      });
-    } catch { return []; }
+      const {data,error} = await supabase.from("stocks_available_for_admin").select("product,account_type,duration_code,total_qty").order("product");
+      if(error) throw error; if(data?.length) return data;
+    } catch{}
+    const {data,error} = await supabase.from("stocks").select("product,account_type,duration_code,quantity,archived").gt("quantity",0).eq("archived",false);
+    if(error){ console.error(error); return []; }
+    const map=new Map(); for(const r of data){ const k=`${r.product}|${r.account_type}|${r.duration_code}`; map.set(k,(map.get(k)||0)+(r.quantity||0)); }
+    return [...map.entries()].map(([k,qty])=>{ const [product,account_type,duration_code]=k.split("|"); return {product,account_type,duration_code,total_qty:qty};});
   }
   async function adminRenderAvailable(){
     const body=$("#adminStocksBody"); if(!body) return;
     body.innerHTML = `<tr><td colspan="4">Fetching…</td></tr>`;
     const rows = await adminAvailable();
-    body.innerHTML = rows.length
-      ? rows.map(r=>`<tr><td>${labelFromKey(r.product_key)}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.total_qty}</td></tr>`).join("")
-      : `<tr><td colspan="4" class="muted">No data yet</td></tr>`;
+    body.innerHTML = rows.length ? rows.map(r=>`<tr><td>${r.product}</td><td>${r.account_type}</td><td>${r.duration_code}</td><td>${r.total_qty}</td></tr>`).join("") : `<tr><td colspan="4" class="muted">No data yet</td></tr>`;
   }
   async function adminFillFormOptions(){
     const prodSel=$("#productSelectAdmin"), typeSel=$("#typeSelectAdmin"), durSel=$("#durSelectAdmin");
     if(!prodSel||!typeSel||!durSel) return;
     const avail=await adminAvailable(); const uniq=a=>[...new Set(a)];
-    const productKeys=uniq(avail.map(r=>r.product_key));
-    fillSelect("#productSelectAdmin", productKeys.length ? productKeys.map(k=>[labelFromKey(k),k]) : [["No stock",""]]);
-    function refresh(){
-      const pk=prodSel.value;
-      const sub=avail.filter(r=>r.product_key===pk);
-      fillSelect("#typeSelectAdmin", uniq(sub.map(r=>r.account_type)));
-      fillSelect("#durSelectAdmin",  uniq(sub.map(r=>r.duration_code)));
-    }
+    const products=uniq(avail.map(r=>r.product));
+    fillSelect("#productSelectAdmin", products.length?products:[["No stock",""]]);
+    function refresh(){ const p=prodSel.value; const sub=avail.filter(r=>r.product===p); fillSelect("#typeSelectAdmin", uniq(sub.map(r=>r.account_type))); fillSelect("#durSelectAdmin", uniq(sub.map(r=>r.duration_code))); }
     prodSel.addEventListener("change", refresh);
-    if(productKeys.length){ prodSel.value=productKeys[0]; refresh(); }
+    if(products.length){ prodSel.value=products[0]; refresh(); }
   }
 
-  // ── ADMIN: get account (by product_key)
+  // ── ADMIN: get account (RPC or fallback)
   async function adminGetAccount(){
-    const product_key=$("#productSelectAdmin")?.value,
-          type=$("#typeSelectAdmin")?.value,
-          duration=$("#durSelectAdmin")?.value;
-    if(!product_key||!type||!duration) return alert("Complete the selections first.");
+    const product=$("#productSelectAdmin")?.value, type=$("#typeSelectAdmin")?.value, duration=$("#durSelectAdmin")?.value;
+    if(!product||!type||!duration) return alert("Complete the selections first.");
     const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
 
     setLoading(true);
     let data=null, error=null;
-    try{
-      const res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product_key, p_type:type, p_duration:duration });
-      data=res.data; error=res.error;
-    }catch(e){ error=e; }
+    try{ const res = await supabase.rpc("get_account",{ p_admin:admin_uuid, p_product:product, p_type:type, p_duration:duration }); data=res.data; error=res.error; }catch(e){ error=e; }
     setLoading(false);
 
     if(error || !data?.length){
-      // fallback: pick 1 matching row and decrement
-      const { data:rows, error:e2 } = await supabase.from("stocks")
-        .select("*")
-        .eq("product_key",product_key).eq("account_type",type).eq("duration_code",duration)
-        .eq("archived",false).gt("quantity",0)
-        .order("created_at",{ascending:true}).limit(1);
+      // fallback: oldest unarchived with qty>0
+      const { data:rows, error:e2 } = await supabase.from("stocks").select("*").eq("product",product).eq("account_type",type).eq("duration_code",duration).eq("archived",false).gt("quantity",0).order("created_at",{ascending:true}).limit(1);
       if(e2){ console.error(e2); return alert("get_account failed."); }
       const row = rows?.[0];
       if(!row){ const out=$("#adminCreds"); if(out) out.textContent="No matching stock."; return; }
 
       // decrement
-      const { error:e3 } = await supabase.from("stocks")
-        .update({ quantity: (row.quantity||1)-1 })
-        .eq("id", row.id).gt("quantity",0);
+      const { error:e3 } = await supabase.from("stocks").update({ quantity: (row.quantity||1)-1 }).eq("id", row.id).gt("quantity",0);
       if(e3){ console.error(e3); return alert("get_account failed (decrement)."); }
 
-      // record sale (store human-readable product label)
+      // create a minimal sales record
       const now = new Date();
       const expires_at = new Date(now.getTime() + durMs(duration)).toISOString();
       await supabase.from("sales").insert([{
-        product: labelFromKey(product_key),
-        account_type: type,
-        created_at: now.toISOString(),
-        expires_at,
-        admin_uuid,
-        owner_uuid: row.owner_id,
-        buyer_link: null,
-        price: null
+        product, account_type:type, created_at: now.toISOString(), expires_at,
+        admin_uuid, owner_uuid: row.owner_id, buyer_link: null, price: null
       }]);
 
+      // show creds
       const out = $("#adminCreds");
       if(out){
         out.innerHTML = `
           <div class="card">
-            <div><b>Product:</b> ${labelFromKey(product_key)} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
+            <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
             <div><b>Email:</b> ${row.email || "-"}</div>
             <div><b>Password:</b> ${row.password || "-"}</div>
             <div><b>Profile:</b> ${row.profile_name || "-"} &nbsp; <b>PIN:</b> ${row.pin || "-"}</div>
@@ -348,12 +349,13 @@
         `;
       }
     } else {
+      // RPC returns creds + computed expiry
       const r = data[0];
       const out=$("#adminCreds");
       if(out){
         out.innerHTML = `
           <div class="card">
-            <div><b>Product:</b> ${labelFromKey(product_key)} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
+            <div><b>Product:</b> ${product} • <b>Type:</b> ${type} • <b>Duration:</b> ${duration}</div>
             <div><b>Email:</b> ${r.email || "-"}</div>
             <div><b>Password:</b> ${r.password || "-"}</div>
             <div><b>Profile:</b> ${r.profile_name || "-"} &nbsp; <b>PIN:</b> ${r.pin || "-"}</div>
@@ -414,9 +416,13 @@
     ensureButtonTypes();
     await primeOptions();
     wireLogin(); wireTopNav(); wireOwnerTabs(); wireOwnerActions(); wireAdminActions();
+
     const r=getRole(), u=getUid();
-    if(r && u){ if(r==="owner"){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); } else { showAdmin(); adminRefreshAll(); } }
-    else showLogin();
+    if(r && u){
+      if(r==="owner"){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); }
+      else { showAdmin(); adminRefreshAll(); }
+    } else showLogin();
+
     setLoading(false);
   }
   document.addEventListener("DOMContentLoaded", boot);
