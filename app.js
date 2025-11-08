@@ -29,50 +29,74 @@
   };
 
   async function boot(){
-  // 1) Wire login toggles FIRST so buttons always work
-  const btnOwner   = $("#btnLoginOwner"),
-        btnAdmin   = $("#btnLoginAdmin");
-  const cardOwner  = $("#ownerLoginCard"),
-        cardAdmin  = $("#adminLoginCard");
-  const inputOwner = $("#ownerUuid"),
-        inputAdmin = $("#adminUuid");
+  // ----- LOGIN TOGGLES (bind first, before any async work)
+const btnOwner   = $("#btnLoginOwner");
+const btnAdmin   = $("#btnLoginAdmin");
+const cardOwner  = $("#ownerLoginCard");
+const cardAdmin  = $("#adminLoginCard");
+const inputOwner = $("#ownerUuid");
+const inputAdmin = $("#adminUuid");
 
-  // ONE handler to catch taps on either login button (works even on iOS)
-document.addEventListener("click", (e) => {
-  const b = e.target.closest("#btnLoginOwner,#btnLoginAdmin");
-  if (!b) return;
+// make sure they are not "submit"
+[btnOwner, btnAdmin].forEach(b => b && (b.type = "button"));
 
+btnOwner?.addEventListener("click", (e) => {
   e.preventDefault();
-  const cardOwner  = $("#ownerLoginCard");
-  const cardAdmin  = $("#adminLoginCard");
-  const inputOwner = $("#ownerUuid");
-  const inputAdmin = $("#adminUuid");
-
-  if (b.id === "btnLoginOwner") {
-    cardAdmin?.classList.add("hidden");
-    cardOwner?.classList.remove("hidden");
-    inputOwner?.focus();
-  } else {
-    cardOwner?.classList.add("hidden");
-    cardAdmin?.classList.remove("hidden");
-    inputAdmin?.focus();
-  }
+  cardAdmin?.classList.add("hidden");
+  cardOwner?.classList.remove("hidden");
+  inputOwner?.focus();
 });
-  // 2) Config + Supabase (no early return)
+btnAdmin?.addEventListener("click", (e) => {
+  e.preventDefault();
+  cardOwner?.classList.add("hidden");
+  cardAdmin?.classList.remove("hidden");
+  inputAdmin?.focus();
+});
+
+// ----- CONTINUE buttons (direct binding + delegation fallback)
+const btnContOwner = $("#continueOwner");
+const btnContAdmin = $("#continueAdmin");
+[btnContOwner, btnContAdmin].forEach(b => b && (b.type = "button"));
+
+// helper to normalize ids
+const N = s => (s || "").replace(/\s+/g, "").toLowerCase();
+
+function isOwner(uid){
   const APP = window.APP || {};
-  if (!APP.url || !APP.key) {
-    console.warn("Missing config.js (APP.url/APP.key). Login UI works; backend calls disabled.");
-  }
-  const supabase = (APP.url && APP.key) ? window.supabase.createClient(APP.url, APP.key) : null;
+  return APP.ownerId ? N(uid) === N(APP.ownerId) : false;
+}
+function isAdmin(uid){
+  const APP = window.APP || {};
+  return Array.isArray(APP.admins) ? APP.admins.map(N).includes(N(uid)) : false;
+}
 
-  const isOwner = uid =>
-    APP.ownerId ? (uid||"").replace(/\s+/g,"").toLowerCase() === APP.ownerId.replace(/\s+/g,"").toLowerCase() : false;
+btnContOwner?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const id = (inputOwner?.value || "").trim();
+  if (!isOwner(id)) { alert("UUID is not an Owner ID."); return; }
+  sessionStorage.setItem("aiax.role", "owner");
+  sessionStorage.setItem("aiax.uid", id);
+  showOwner();
+  ownerRenderStocks();
+  ownerRenderRecords();
+});
 
-  const isAdmin = uid =>
-    Array.isArray(APP.admins) &&
-    APP.admins.map(s=>(s||"").replace(/\s+/g,"").toLowerCase())
-              .includes((uid||"").replace(/\s+/g,"").toLowerCase());
-    // shared state
+btnContAdmin?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const id = (inputAdmin?.value || "").trim();
+  if (!(isOwner(id) || isAdmin(id))) { alert("UUID is not an Admin ID."); return; }
+  sessionStorage.setItem("aiax.role", "admin");
+  sessionStorage.setItem("aiax.uid", id);
+  showAdmin();
+  adminRefreshAll();
+});
+
+// delegation backup (in case DOM is re-rendered)
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("#continueOwner,#continueAdmin");
+  if (!t) return;
+  t.id === "continueOwner" ? btnContOwner?.click() : btnContAdmin?.click();
+});// shared state
     let ALL_PRODUCTS = [];   // [{key,label,category}]
     let CUR_CAT = null;      // chips filter (null = All)
 
