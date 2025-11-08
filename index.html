@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AiaxStock Management</title>
-  <link rel="stylesheet" href="style.css?v16" />
+  <link rel="stylesheet" href="style.css?v=16"/>
 
-  <!-- libs + config + app -->
+  <!-- libs + config + app (use defer so DOM exists) -->
   <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script defer src="config.js?v=12"></script>
-  <script defer src="app.js?v=23"></script>
+  <script defer src="config.js?v=11"></script>
+  <script defer src="app.js?v=30"></script>
 </head>
 <body>
   <div class="loading-overlay hidden">Loading...</div>
@@ -25,9 +25,9 @@
         <button id="btnLoginOwner" type="button" class="btn btn-primary">Login as Owner</button>
         <div id="ownerLoginCard" class="account-details hidden">
           <label for="ownerUuid">Owner UUID</label>
-          <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off" />
+          <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off"/>
           <div class="actions">
-            <button id="continueOwner" class="btn btn-primary">Continue</button>
+            <button id="continueOwner" type="button" class="btn btn-primary">Continue</button>
           </div>
         </div>
       </div>
@@ -36,9 +36,9 @@
         <button id="btnLoginAdmin" type="button" class="btn btn-primary">Login as Admin</button>
         <div id="adminLoginCard" class="account-details hidden">
           <label for="adminUuid">Admin UUID</label>
-          <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off" />
+          <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off"/>
           <div class="actions">
-            <button id="continueAdmin" class="btn btn-secondary">Continue</button>
+            <button id="continueAdmin" type="button" class="btn btn-secondary">Continue</button>
           </div>
         </div>
       </div>
@@ -50,15 +50,15 @@
     <div class="topbar">
       <h1>AiaxStock Management — Owner</h1>
       <div class="toolbar">
-        <button id="goToAdmin" class="btn btn-ghost">Go to Admin</button>
-        <button class="btn btn-secondary btnLogout">Logout</button>
+        <button id="goToAdmin" type="button" class="btn btn-ghost">Go to Admin</button>
+        <button class="btn btn-secondary btnLogout" type="button">Logout</button>
       </div>
     </div>
 
     <div class="tabs">
-      <button class="tab active" data-target="tabAdd">Add Stock</button>
-      <button class="tab" data-target="tabStocks">Stocks</button>
-      <button class="tab" data-target="tabRecords">Records</button>
+      <button class="tab active" data-target="tabAdd" type="button">Add Stock</button>
+      <button class="tab" data-target="tabStocks" type="button">Stocks</button>
+      <button class="tab" data-target="tabRecords" type="button">Records</button>
     </div>
 
     <!-- Add Stock -->
@@ -74,40 +74,40 @@
           <select id="durSelectOwner"></select>
         </label>
         <label>Quantity
-          <input id="oaQty" type="number" value="1" min="1" />
+          <input id="oaQty" type="number" value="1" min="1"/>
         </label>
       </div>
 
       <div class="grid-2">
         <label>Email (optional)
-          <input id="oaEmail" placeholder="login email" />
+          <input id="oaEmail" placeholder="login email"/>
         </label>
         <label>Password (optional)
-          <input id="oaPass" placeholder="login password" />
+          <input id="oaPass" placeholder="login password"/>
         </label>
         <label>Profile (optional)
-          <input id="oaProfile" placeholder="profile name" />
+          <input id="oaProfile" placeholder="profile name"/>
         </label>
         <label>PIN (optional)
-          <input id="oaPin" placeholder="profile pin" />
+          <input id="oaPin" placeholder="profile pin"/>
         </label>
       </div>
 
       <div class="grid-2">
         <label>Premiumed at (optional)
-          <input id="oaPremiumedAt" type="datetime-local" />
+          <input id="oaPremiumedAt" type="datetime-local"/>
         </label>
         <label>Auto-archive if unsold (days, optional)
-          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5" />
+          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5"/>
         </label>
       </div>
 
       <label>Notes
-        <input id="oaNotes" placeholder="any notes" />
+        <input id="oaNotes" placeholder="any notes"/>
       </label>
 
       <div class="actions">
-        <button id="oaAddBtn" class="btn btn-primary">Add Stock</button>
+        <button id="oaAddBtn" class="btn btn-primary" type="button">Add Stock</button>
       </div>
     </div>
 
@@ -116,10 +116,10 @@
       <div class="row between">
         <h2>Current Stocks</h2>
         <div class="row" style="gap:8px">
-          <button id="btnOwnerRefresh" class="btn btn-outline">Refresh</button>
-          <button id="btnOwnerPurge" class="btn btn-outline">Auto-Archive Now</button>
-          <label style="display:flex;align-items:center;gap:6px">
-            <input id="chkShowArchived" type="checkbox" />
+          <button id="btnOwnerRefresh" class="btn btn-outline" type="button">Refresh</button>
+          <button id="btnOwnerPurge" class="btn btn-outline" type="button">Auto-Archive Now</button>
+          <label class="chk-inline">
+            <input id="chkShowArchived" type="checkbox"/>
             <span class="muted">show archived</span>
           </label>
         </div>
@@ -128,16 +128,8 @@
         <table class="table" id="ownerStocksTable">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Product</th>
-              <th>Type</th>
-              <th>Duration</th>
-              <th>Qty</th>
-              <th>Premiumed</th>
-              <th>Listed</th>
-              <th>Auto-Exp (d)</th>
-              <th>Archived</th>
-              <th>Actions</th>
+              <th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
+              <th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -149,34 +141,33 @@
     <div id="tabRecords" class="tab-page hidden">
       <h2>Sales / Buyer Records</h2>
 
-      <!-- quick add form -->
       <div class="card" style="margin-bottom:12px">
         <div class="grid-3">
           <label>Product
-            <input id="recProduct" placeholder="e.g., Netflix" />
+            <input id="recProduct" placeholder="e.g., Netflix"/>
           </label>
           <label>Account type
-            <input id="recType" placeholder="e.g., shared profile" />
+            <input id="recType" placeholder="e.g., shared profile"/>
           </label>
           <label>Expires at (optional)
-            <input id="recExpires" type="datetime-local" />
+            <input id="recExpires" type="datetime-local"/>
           </label>
         </div>
         <div class="grid-3">
           <label>Buyer link (optional)
-            <input id="recBuyer" placeholder="link or handle" />
+            <input id="recBuyer" placeholder="link or handle"/>
           </label>
           <label>Price (optional)
-            <input id="recPrice" type="number" step="0.01" placeholder="0.00" />
+            <input id="recPrice" type="number" step="0.01" placeholder="0.00"/>
           </label>
-          <label style="display:flex;align-items:center;gap:10px;margin-top:22px">
-            <input id="recWarranty" type="checkbox" />
+          <label class="warranty-line">
+            <input id="recWarranty" type="checkbox"/>
             <span>With warranty</span>
-            <input id="recExtraDays" type="number" min="0" placeholder="+ days" style="max-width:120px" />
+            <input id="recExtraDays" type="number" min="0" placeholder="+ days"/>
           </label>
         </div>
         <div class="actions">
-          <button id="btnAddRecord" class="btn btn-primary">Add Record</button>
+          <button id="btnAddRecord" class="btn btn-primary" type="button">Add Record</button>
         </div>
       </div>
 
@@ -184,15 +175,7 @@
         <table class="table" id="ownerRecordsTable">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Product</th>
-              <th>Type</th>
-              <th>Created</th>
-              <th>Expires</th>
-              <th>Admin</th>
-              <th>Buyer link</th>
-              <th>Price</th>
-              <th>Actions</th>
+              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -200,7 +183,7 @@
       </div>
 
       <div class="actions">
-        <button id="btnExportCSV" class="btn btn-outline">Export CSV</button>
+        <button id="btnExportCSV" class="btn btn-outline" type="button">Export CSV</button>
       </div>
     </div>
   </section>
@@ -210,23 +193,19 @@
     <div class="topbar">
       <h1>AiaxStock Management — Admin</h1>
       <div class="toolbar">
-        <button id="goToOwner" class="btn btn-ghost">Go to Owner</button>
-        <button class="btn btn-secondary btnLogout">Logout</button>
+        <button id="goToOwner" type="button" class="btn btn-ghost">Go to Owner</button>
+        <button class="btn btn-secondary btnLogout" type="button">Logout</button>
       </div>
     </div>
-<!-- ADMIN: keep only ONE table block with catBar -->
-<h2>Available Stocks</h2>
-<div id="catBar" class="chips"></div>
-<div class="table-wrap">
-  <table class="table">
-    <thead>
-      <tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr>
-    </thead>
-    <tbody id="adminStocksBody">
-      <tr><td colspan="4" class="muted">No data yet</td></tr>
-    </tbody>
-  </table>
-</div>
+
+    <h2>Available Stocks</h2>
+    <div id="catBar" class="chips"></div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
+        <tbody id="adminStocksBody"><tr><td colspan="4" class="muted">No data yet</td></tr></tbody>
+      </table>
+    </div>
 
     <h2>Get Account</h2>
     <div class="grid-3">
@@ -244,7 +223,7 @@
       </label>
     </div>
     <div class="actions">
-      <button id="getAccountBtn" class="btn btn-primary">Get Account</button>
+      <button id="getAccountBtn" class="btn btn-primary" type="button">Get Account</button>
     </div>
 
     <div id="adminCreds"></div>
@@ -252,9 +231,7 @@
     <h2>My Buyers Record</h2>
     <div class="table-wrap">
       <table class="table" id="adminRecordsTable">
-        <thead>
-          <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th></tr>
-        </thead>
+        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
