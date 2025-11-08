@@ -2,21 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AiaxCart Premium Shop</title>
-  <link rel="stylesheet" href="style.css?v=fix4" />
-
-  <!-- Supabase + config + app -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AiaxStock Management</title>
+  <link rel="stylesheet" href="style.css?v=17">
+  <!-- libs + config + app -->
   <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script defer src="config.js?v=12"></script>
-  <script defer src="app.js?v=fix4"></script>
+  <script defer src="config.js?v=11"></script>
+  <script defer src="app.js?v=31"></script>
 </head>
-
 <body>
-  <div class="loading-overlay hidden" style="display:none!important" aria-hidden="true">
-    <div class="spinner"></div>
-  </div>
-  <div class="toast" role="status" aria-live="polite"></div>
+  <div class="loading-overlay hidden">Loading…</div>
+  <div class="toast"></div>
 
   <!-- LOGIN -->
   <section id="viewLogin" class="container">
@@ -25,13 +21,7 @@
 
     <div class="login-columns">
       <div class="login-card">
-        <button id="btnLoginOwner" type="button" class="btn btn-primary"
-          onclick="document.getElementById('adminLoginCard')?.classList.add('hidden');
-                   document.getElementById('ownerLoginCard')?.classList.remove('hidden');
-                   document.getElementById('ownerUuid')?.focus();">
-          Login as Owner
-        </button>
-
+        <button id="btnLoginOwner" type="button" class="btn btn-primary">Login as Owner</button>
         <div id="ownerLoginCard" class="account-details hidden">
           <label for="ownerUuid">Owner UUID</label>
           <input id="ownerUuid" placeholder="paste owner UUID" autocomplete="off" />
@@ -42,13 +32,7 @@
       </div>
 
       <div class="login-card">
-        <button id="btnLoginAdmin" type="button" class="btn btn-primary"
-          onclick="document.getElementById('ownerLoginCard')?.classList.add('hidden');
-                   document.getElementById('adminLoginCard')?.classList.remove('hidden');
-                   document.getElementById('adminUuid')?.focus();">
-          Login as Admin
-        </button>
-
+        <button id="btnLoginAdmin" type="button" class="btn btn-primary">Login as Admin</button>
         <div id="adminLoginCard" class="account-details hidden">
           <label for="adminUuid">Admin UUID</label>
           <input id="adminUuid" placeholder="paste admin UUID" autocomplete="off" />
@@ -60,10 +44,10 @@
     </div>
   </section>
 
-  <!-- OWNER PANEL -->
+  <!-- OWNER -->
   <section id="viewOwner" class="container hidden">
     <div class="topbar">
-      <h1>Owner Dashboard</h1>
+      <h1>AiaxStock Management — Owner</h1>
       <div class="toolbar">
         <button id="goToAdmin" type="button" class="btn btn-ghost">Go to Admin</button>
         <button type="button" class="btn btn-secondary btnLogout">Logout</button>
@@ -108,6 +92,15 @@
         </label>
       </div>
 
+      <div class="grid-2">
+        <label>Premiumed at (optional)
+          <input id="oaPremiumedAt" type="datetime-local" />
+        </label>
+        <label>Auto-archive if unsold (days, optional)
+          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5" />
+        </label>
+      </div>
+
       <label>Notes
         <input id="oaNotes" placeholder="any notes" />
       </label>
@@ -123,7 +116,8 @@
         <h2>Current Stocks</h2>
         <div class="row" style="gap:8px">
           <button id="btnOwnerRefresh" type="button" class="btn btn-outline">Refresh</button>
-          <label style="display:flex;align-items:center;gap:6px">
+          <button id="btnOwnerPurge" type="button" class="btn btn-outline">Auto-Archive Now</button>
+          <label class="checkline">
             <input id="chkShowArchived" type="checkbox" />
             <span class="muted">show archived</span>
           </label>
@@ -132,7 +126,10 @@
       <div class="table-wrap">
         <table class="table" id="ownerStocksTable">
           <thead>
-            <tr><th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th><th>Actions</th></tr>
+            <tr>
+              <th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
+              <th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -141,25 +138,60 @@
 
     <!-- Records -->
     <div id="tabRecords" class="tab-page hidden">
-      <h2>Sales Records</h2>
-      <div class="actions">
-        <button id="btnAddRecord" type="button" class="btn btn-primary">Add Record</button>
+      <h2>Sales / Buyer Records</h2>
+
+      <div class="card" style="margin-bottom:12px">
+        <div class="grid-3">
+          <label>Product
+            <input id="recProduct" placeholder="e.g., Netflix" />
+          </label>
+          <label>Account type
+            <input id="recType" placeholder="e.g., shared profile" />
+          </label>
+          <label>Expires at (optional)
+            <input id="recExpires" type="datetime-local" />
+          </label>
+        </div>
+        <div class="grid-3">
+          <label>Buyer link (optional)
+            <input id="recBuyer" placeholder="link or handle" />
+          </label>
+          <label>Price (optional)
+            <input id="recPrice" type="number" step="0.01" placeholder="0.00" />
+          </label>
+          <label class="warranty">
+            <input id="recWarranty" type="checkbox" />
+            <span>With warranty</span>
+            <input id="recExtraDays" type="number" min="0" placeholder="+ days" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnAddRecord" type="button" class="btn btn-primary">Add Record</button>
+        </div>
       </div>
+
       <div class="table-wrap">
         <table class="table" id="ownerRecordsTable">
           <thead>
-            <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th></tr>
+            <tr>
+              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th>
+              <th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
+
+      <div class="actions">
+        <button id="btnExportCSV" type="button" class="btn btn-outline">Export CSV</button>
+      </div>
     </div>
   </section>
 
-  <!-- ADMIN PANEL -->
+  <!-- ADMIN -->
   <section id="viewAdmin" class="container hidden">
     <div class="topbar">
-      <h1>Admin Dashboard</h1>
+      <h1>AiaxStock Management — Admin</h1>
       <div class="toolbar">
         <button id="goToOwner" type="button" class="btn btn-ghost">Go to Owner</button>
         <button type="button" class="btn btn-secondary btnLogout">Logout</button>
@@ -171,19 +203,38 @@
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th></tr></thead>
-        <tbody id="adminStocksBody"></tbody>
+        <tbody id="adminStocksBody"><tr><td colspan="4" class="muted">No data yet</td></tr></tbody>
+      </table>
+    </div>
+
+    <h2>Get Account</h2>
+    <div class="grid-3">
+      <label>Category
+        <select id="catSelectAdmin"></select>
+      </label>
+      <label>Product
+        <select id="productSelectAdmin"></select>
+      </label>
+      <label>Account type
+        <select id="typeSelectAdmin"></select>
+      </label>
+      <label>Duration
+        <select id="durSelectAdmin"></select>
+      </label>
+    </div>
+    <div class="actions">
+      <button id="getAccountBtn" type="button" class="btn btn-primary">Get Account</button>
+    </div>
+
+    <div id="adminCreds"></div>
+
+    <h2>My Buyers Record</h2>
+    <div class="table-wrap">
+      <table class="table" id="adminRecordsTable">
+        <thead><tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th></th></tr></thead>
+        <tbody></tbody>
       </table>
     </div>
   </section>
-
-  <!-- Safety Script -->
-  <script>
-    (function(){
-      const L = document.querySelector('.loading-overlay');
-      if(L){ L.classList.add('hidden'); L.style.display='none'; }
-      ['#continueOwner','#continueAdmin','#oaAddBtn','#btnOwnerRefresh','#btnOwnerPurge','#btnAddRecord','#getAccountBtn']
-        .forEach(sel => { const el=document.querySelector(sel); if(el) el.type='button'; });
-    })();
-  </script>
 </body>
 </html>
