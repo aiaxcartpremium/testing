@@ -163,6 +163,10 @@ input:focus, select:focus{ outline:none; border-color:#f2a0ba; box-shadow:0 0 0 
 .login-center p{ text-align:center; }
 .login-columns{ max-width: 780px; margin: 0 auto; }
 /* Minor spacing polish */
+#viewLogin h1, #viewLogin p { text-align:center; }
+#viewLogin .login-columns { max-width:560px; margin:0 auto; }
+#viewLogin .login-card { text-align:center; }
+
 #viewOwner .tab-page + .tab-page,
 #viewAdmin h2 + .table-wrap,
 #viewAdmin .table-wrap + h2{ margin-top:16px; }
