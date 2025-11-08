@@ -8,8 +8,18 @@
   // ── runtime helpers
   const norm = s => (s||"").replace(/\s+/g,"").toLowerCase();
   const toast = (msg) => { const t=$(".toast"); if(!t) return; t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); };
-  const setLoading = (on) => { const L=$(".loading-overlay"); if(!L) return; L.classList.toggle("hidden", !on); };
-  const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
+  const setLoading = (on) => {
+  const L = document.querySelector(".loading-overlay");
+  if (!L) return;
+  if (on) {
+    L.style.display = "flex";
+    L.classList.remove("hidden");
+  } else {
+    L.classList.add("hidden");
+    L.style.display = "none";
+  }
+};
+ const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
   const addDays = (date, days) => new Date(date.getTime() + (days||0)*86400000);
 
   // session helpers
@@ -29,6 +39,9 @@
   };
 
   async function boot(){
+     const _L = document.querySelector('.loading-overlay');
+  if (_L) { _L.classList.add('hidden'); _L.style.display = 'none'; }
+
     /* -------------------- 1) WIRE LOGIN FIRST -------------------- */
     const btnOwner   = $("#btnLoginOwner");
     const btnAdmin   = $("#btnLoginAdmin");
