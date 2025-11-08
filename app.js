@@ -29,12 +29,39 @@
   };
 
   async function boot(){
-    const APP = window.APP || {};
-    if (!APP.url || !APP.key) { alert("Missing config.js"); return; }
-    const supabase = window.supabase.createClient(APP.url, APP.key);
-    const isOwner = uid => norm(uid) === norm(APP.ownerId);
-    const isAdmin = uid => (APP.admins||[]).map(norm).includes(norm(uid));
+  // 1) Wire login toggles FIRST so buttons always work
+  const btnOwner   = $("#btnLoginOwner"),
+        btnAdmin   = $("#btnLoginAdmin");
+  const cardOwner  = $("#ownerLoginCard"),
+        cardAdmin  = $("#adminLoginCard");
+  const inputOwner = $("#ownerUuid"),
+        inputAdmin = $("#adminUuid");
 
+  btnOwner?.addEventListener("click", () => {
+    cardAdmin?.classList.add("hidden");
+    cardOwner?.classList.remove("hidden");
+    inputOwner?.focus();
+  });
+  btnAdmin?.addEventListener("click", () => {
+    cardOwner?.classList.add("hidden");
+    cardAdmin?.classList.remove("hidden");
+    inputAdmin?.focus();
+  });
+
+  // 2) Config + Supabase (no early return)
+  const APP = window.APP || {};
+  if (!APP.url || !APP.key) {
+    console.warn("Missing config.js (APP.url/APP.key). Login UI works; backend calls disabled.");
+  }
+  const supabase = (APP.url && APP.key) ? window.supabase.createClient(APP.url, APP.key) : null;
+
+  const isOwner = uid =>
+    APP.ownerId ? (uid||"").replace(/\s+/g,"").toLowerCase() === APP.ownerId.replace(/\s+/g,"").toLowerCase() : false;
+
+  const isAdmin = uid =>
+    Array.isArray(APP.admins) &&
+    APP.admins.map(s=>(s||"").replace(/\s+/g,"").toLowerCase())
+              .includes((uid||"").replace(/\s+/g,"").toLowerCase());
     // shared state
     let ALL_PRODUCTS = [];   // [{key,label,category}]
     let CUR_CAT = null;      // chips filter (null = All)
