@@ -1,4 +1,4 @@
-/* app.js — AiaxStock (v2025-11-08.22) */
+/* app.js — AiaxStock (v2025-11-08.30 “login fix + clean wiring”) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
@@ -8,11 +8,11 @@
   // ── runtime helpers
   const norm = s => (s||"").replace(/\s+/g,"").toLowerCase();
   const toast = (msg) => { const t=$(".toast"); if(!t) return; t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); };
-  const setLoading = (on) => { const L=$(".loading-overlay"); if(!L) return; L.classList.toggle("hidden", !on); L.style.pointerEvents="none"; };
+  const setLoading = (on) => { const L=$(".loading-overlay"); if(!L) return; L.classList.toggle("hidden", !on); };
   const fmtDT = (d) => d ? new Date(d).toLocaleString() : "";
   const addDays = (date, days) => new Date(date.getTime() + (days||0)*86400000);
 
-  // session
+  // ── session helpers
   const SKEY_ROLE = "aiax.role";
   const SKEY_UID  = "aiax.uid";
   const setSess   = (role, uid) => { sessionStorage.setItem(SKEY_ROLE, role); sessionStorage.setItem(SKEY_UID, uid); };
@@ -20,7 +20,7 @@
   const getUid    = () => sessionStorage.getItem(SKEY_UID);
   const clearSess = () => { sessionStorage.removeItem(SKEY_ROLE); sessionStorage.removeItem(SKEY_UID); };
 
-  // duration utils
+  // ── duration code → ms
   const durMs = (code) => {
     if (!code) return 0;
     if (/^\d+d$/.test(code)) return parseInt(code,10)*86400000;
@@ -29,78 +29,39 @@
   };
 
   async function boot(){
-  // ----- LOGIN TOGGLES (bind first, before any async work)
-const btnOwner   = $("#btnLoginOwner");
-const btnAdmin   = $("#btnLoginAdmin");
-const cardOwner  = $("#ownerLoginCard");
-const cardAdmin  = $("#adminLoginCard");
-const inputOwner = $("#ownerUuid");
-const inputAdmin = $("#adminUuid");
+    // 1) Bind LOGIN UI first so it always works even if data calls fail
+    const btnOwner   = $("#btnLoginOwner");
+    const btnAdmin   = $("#btnLoginAdmin");
+    const cardOwner  = $("#ownerLoginCard");
+    const cardAdmin  = $("#adminLoginCard");
+    const inputOwner = $("#ownerUuid");
+    const inputAdmin = $("#adminUuid");
+    [btnOwner, btnAdmin].forEach(b => b && (b.type = "button"));
 
-// make sure they are not "submit"
-[btnOwner, btnAdmin].forEach(b => b && (b.type = "button"));
+    btnOwner?.addEventListener("click", (e) => {
+      e.preventDefault();
+      cardAdmin?.classList.add("hidden");
+      cardOwner?.classList.remove("hidden");
+      inputOwner?.focus();
+    });
+    btnAdmin?.addEventListener("click", (e) => {
+      e.preventDefault();
+      cardOwner?.classList.add("hidden");
+      cardAdmin?.classList.remove("hidden");
+      inputAdmin?.focus();
+    });
 
-btnOwner?.addEventListener("click", (e) => {
-  e.preventDefault();
-  cardAdmin?.classList.add("hidden");
-  cardOwner?.classList.remove("hidden");
-  inputOwner?.focus();
-});
-btnAdmin?.addEventListener("click", (e) => {
-  e.preventDefault();
-  cardOwner?.classList.add("hidden");
-  cardAdmin?.classList.remove("hidden");
-  inputAdmin?.focus();
-});
+    // 2) Config + Supabase
+    const APP = window.APP || {};
+    const supabase = (APP.url && APP.key) ? window.supabase.createClient(APP.url, APP.key) : null;
+    const isOwner = uid => APP.ownerId ? norm(uid) === norm(APP.ownerId) : false;
+    const isAdmin = uid => Array.isArray(APP.admins) && APP.admins.map(norm).includes(norm(uid));
 
-// ----- CONTINUE buttons (direct binding + delegation fallback)
-const btnContOwner = $("#continueOwner");
-const btnContAdmin = $("#continueAdmin");
-[btnContOwner, btnContAdmin].forEach(b => b && (b.type = "button"));
-
-// helper to normalize ids
-const N = s => (s || "").replace(/\s+/g, "").toLowerCase();
-
-function isOwner(uid){
-  const APP = window.APP || {};
-  return APP.ownerId ? N(uid) === N(APP.ownerId) : false;
-}
-function isAdmin(uid){
-  const APP = window.APP || {};
-  return Array.isArray(APP.admins) ? APP.admins.map(N).includes(N(uid)) : false;
-}
-
-btnContOwner?.addEventListener("click", (e) => {
-  e.preventDefault();
-  const id = (inputOwner?.value || "").trim();
-  if (!isOwner(id)) { alert("UUID is not an Owner ID."); return; }
-  sessionStorage.setItem("aiax.role", "owner");
-  sessionStorage.setItem("aiax.uid", id);
-  showOwner();
-  ownerRenderStocks();
-  ownerRenderRecords();
-});
-
-btnContAdmin?.addEventListener("click", (e) => {
-  e.preventDefault();
-  const id = (inputAdmin?.value || "").trim();
-  if (!(isOwner(id) || isAdmin(id))) { alert("UUID is not an Admin ID."); return; }
-  sessionStorage.setItem("aiax.role", "admin");
-  sessionStorage.setItem("aiax.uid", id);
-  showAdmin();
-  adminRefreshAll();
-});
-
-// delegation backup (in case DOM is re-rendered)
-document.addEventListener("click", (e) => {
-  const t = e.target.closest("#continueOwner,#continueAdmin");
-  if (!t) return;
-  t.id === "continueOwner" ? btnContOwner?.click() : btnContAdmin?.click();
-});// shared state
+    // 3) Shared state
     let ALL_PRODUCTS = [];   // [{key,label,category}]
-    let CUR_CAT = null;      // chips filter (null = All)
+    let CUR_CAT = null;      // null = All
 
-    // ---------- OPTIONS (products, types, durations)
+    // ---------- OPTIONS
     const fillSelect = (sel, items) => {
       const el=$(sel); if(!el) return;
       el.innerHTML="";
@@ -116,6 +77,7 @@ document.addEventListener("click", (e) => {
 
     async function loadProducts() {
       try {
+        if (!supabase) throw new Error("no supabase");
         const { data, error } = await supabase
           .from("products")
           .select("key,label,category")
@@ -123,30 +85,39 @@ document.addEventListener("click", (e) => {
         if (error) throw error;
         if (data?.length) return data;
       } catch {}
-      // fallback from APP.PRODUCTS -> default category 'Entertainment'
       return (APP.PRODUCTS || []).map(x =>
         typeof x === "string" ? { key: x.toLowerCase(), label: x, category: "Entertainment" } : x
       );
     }
     async function loadAccountTypes() {
-      try { const {data,error} = await supabase.from("account_types").select("label").order("label"); if(error) throw error; if(data?.length) return data.map(r=>r.label); } catch {}
+      try { 
+        if (!supabase) throw new Error("no supabase");
+        const {data,error} = await supabase.from("account_types").select("label").order("label"); 
+        if(error) throw error; 
+        if(data?.length) return data.map(r=>r.label); 
+      } catch {}
       return APP.ACCOUNT_TYPES || [];
     }
     async function loadDurations() {
-      try { const {data,error} = await supabase.from("durations").select("label,code,seq").order("seq",{ascending:true}); if(error) throw error; if(data?.length) return data.map(r=>[r.label,r.code]); } catch {}
+      try { 
+        if (!supabase) throw new Error("no supabase");
+        const {data,error} = await supabase.from("durations").select("label,code,seq").order("seq",{ascending:true}); 
+        if(error) throw error; 
+        if(data?.length) return data.map(r=>[r.label,r.code]); 
+      } catch {}
       return APP.DURATIONS || [];
     }
 
-    // ---------- Category CHIPS (for table + form cascade)
+    // ---------- Category chips
     function buildCatBar(){
       const bar = $("#catBar"); if(!bar || !ALL_PRODUCTS.length) return;
       const cats = uniq(ALL_PRODUCTS.map(p => p.category || "Uncategorized"));
-      bar.innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${c}">${c}</button>`).join("");
+      bar.innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${c}" type="button">${c}</button>`).join("");
       bar.addEventListener("click", e=>{
         const b = e.target.closest(".chip"); if(!b) return;
         CUR_CAT = b.dataset.cat === "All" ? null : b.dataset.cat;
         $$("#catBar .chip").forEach(x=>x.classList.toggle("active", x===b));
-        adminRefreshAll(); // re-render table & refill form selects
+        adminRefreshAll();
       });
       $$("#catBar .chip")[0]?.classList.add("active");
     }
@@ -166,26 +137,24 @@ document.addEventListener("click", (e) => {
       fillSelect("#durSelectAdmin",   []);
       fillSelect("#catSelectAdmin",   []);
 
-      // fetch & cache
+      // fetch
       const [prods, types, durs] = await Promise.all([loadProducts(), loadAccountTypes(), loadDurations()]);
       ALL_PRODUCTS = prods;
       buildCatBar();
 
-      // owner selects
       if (prods.length) fillSelect("#productSelectOwner", prods.map(r=>[r.label, r.key]));
       if (types.length) fillSelect("#typeSelectOwner", types);
       if (durs.length)  fillSelect("#durSelectOwner",  durs);
 
-      // admin “Get Account” category dropdown (independent from chips)
       const cats = uniq(ALL_PRODUCTS.map(r=>r.category || "Uncategorized"));
       fillSelect("#catSelectAdmin", ["All", ...cats].map(c=>[c,c]));
 
-      // initial fill for product/type/dur based on availability
       await adminFillFormOptions();
     }
 
-    // ---------- OWNER: add stock
+    // ---------- OWNER
     async function ownerAddStock() {
+      if(!supabase) return alert("Missing Supabase config.");
       const owner_id      = getUid();
       const product       = $('#productSelectOwner')?.value||'';
       const account_type  = $('#typeSelectOwner')?.value||'';
@@ -230,7 +199,6 @@ document.addEventListener("click", (e) => {
       await ownerRenderStocks();
     }
 
-    // ---------- OWNER: list / edit / archive
     function ownerStocksSelect(showArchived){
       return supabase.from("stocks")
         .select("id,product,account_type,duration_code,quantity,premiumed_at,created_at,auto_expire_days,archived,owner_id")
@@ -238,6 +206,7 @@ document.addEventListener("click", (e) => {
         .eq("archived", !!showArchived);
     }
     async function ownerRenderStocks(){
+      if(!supabase) return;
       const tbody = $("#ownerStocksTable tbody"); if(!tbody) return;
       const showArchived = $("#chkShowArchived")?.checked || false;
 
@@ -258,14 +227,13 @@ document.addEventListener("click", (e) => {
           <td>${r.auto_expire_days ?? ""}</td>
           <td>${r.archived ? "yes" : ""}</td>
           <td>
-            <button class="btn-outline btnEdit">Edit</button>
-            <button class="btn-outline btnRemove">Remove</button>
-            ${r.archived ? `<button class="btn-outline btnUnarchive">Unarchive</button>` : `<button class="btn-outline btnArchive">Archive</button>`}
+            <button class="btn-outline btnEdit" type="button">Edit</button>
+            <button class="btn-outline btnRemove" type="button">Remove</button>
+            ${r.archived ? `<button class="btn-outline btnUnarchive" type="button">Unarchive</button>` : `<button class="btn-outline btnArchive" type="button">Archive</button>`}
           </td>
         </tr>
       `).join("");
 
-      // actions
       $$(".btnRemove", tbody).forEach(b=>b.addEventListener("click", async ()=>{
         const id = b.closest("tr").dataset.id;
         if(!confirm(`Delete stock #${id}?`)) return;
@@ -312,8 +280,8 @@ document.addEventListener("click", (e) => {
       }));
     }
 
-    // purge: archive unsold whose age>auto_expire_days
     async function ownerPurgeExpired(){
+      if(!supabase) return;
       const { data, error } = await supabase
         .from("stocks")
         .select("id,created_at,auto_expire_days,quantity,archived,owner_id")
@@ -330,8 +298,8 @@ document.addEventListener("click", (e) => {
       ownerRenderStocks();
     }
 
-    // ---------- OWNER: quick “Add Record”
     async function ownerAddRecord(){
+      if(!supabase) return alert("Missing Supabase config.");
       const product = $("#recProduct")?.value.trim();
       const account_type = $("#recType")?.value.trim();
       const expires_in_ui = $("#recExpires")?.value.trim();
@@ -345,8 +313,6 @@ document.addEventListener("click", (e) => {
       }
 
       setLoading(true);
-
-      // find a matching stock to decrement (any duration; prefer oldest)
       const { data:rows, error:errFind } = await supabase
         .from("stocks").select("*")
         .eq("owner_id", getUid())
@@ -405,8 +371,8 @@ document.addEventListener("click", (e) => {
       ownerRenderRecords();
     }
 
-    // ---------- OWNER: sales records list/edit/delete
     async function ownerRenderRecords(){
+      if(!supabase) return;
       const tbody = $("#ownerRecordsTable tbody"); if(!tbody) return;
       tbody.innerHTML = `<tr><td colspan="9">Loading…</td></tr>`;
       let rows = [];
@@ -440,13 +406,12 @@ document.addEventListener("click", (e) => {
           <td>${r.buyer_link || ""}</td>
           <td>${r.price ?? ""}</td>
           <td>
-            <button class="btn-outline btnRecEdit">Edit</button>
-            <button class="btn-outline btnRecDel">Delete</button>
+            <button class="btn-outline btnRecEdit" type="button">Edit</button>
+            <button class="btn-outline btnRecDel" type="button">Delete</button>
           </td>
         </tr>
       `).join("");
 
-      // edit
       $$(".btnRecEdit", tbody).forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const tr = btn.closest("tr"); const id = tr.dataset.id;
@@ -481,7 +446,6 @@ document.addEventListener("click", (e) => {
         });
       });
 
-      // delete
       $$(".btnRecDel", tbody).forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const tr = btn.closest("tr"); const id = tr.dataset.id;
@@ -494,7 +458,6 @@ document.addEventListener("click", (e) => {
         });
       });
 
-      // CSV export
       $("#btnExportCSV")?.addEventListener("click", ()=>{
         if(!rows.length) return;
         const head = Object.keys(rows[0]);
@@ -511,6 +474,7 @@ document.addEventListener("click", (e) => {
     // ---------- ADMIN
     async function adminAvailable(){
       try{
+        if(!supabase) throw new Error("no supabase");
         const {data,error} = await supabase
           .from("stocks_available_for_admin")
           .select("product,account_type,duration_code,total_qty")
@@ -518,7 +482,7 @@ document.addEventListener("click", (e) => {
         if(error) throw error;
         if(data?.length) return data;
       } catch{}
-      // fallback
+      if(!supabase) return [];
       const {data,error} = await supabase
         .from("stocks")
         .select("product,account_type,duration_code,quantity,archived")
@@ -552,10 +516,8 @@ document.addEventListener("click", (e) => {
       const durSel  = $("#durSelectAdmin");
       if(!prodSel||!typeSel||!durSel) return;
 
-      // availability filtered by CHIPS (CUR_CAT)
       const avail = filterAvailByCat(await adminAvailable());
 
-      // category dropdown affects product list inside “Get Account” form only
       const formCat = (catSel?.value && catSel.value !== "All") ? catSel.value : null;
       const allowedKeys = new Set(
         (formCat ? ALL_PRODUCTS.filter(p=>(p.category||"Uncategorized")===formCat) : ALL_PRODUCTS).map(p=>p.key)
@@ -564,7 +526,11 @@ document.addEventListener("click", (e) => {
       const products = uniq(avail.map(r=>r.product).filter(k=>allowedKeys.has(k)));
 
       prodSel.innerHTML = "";
-      products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=ALL_PRODUCTS.find(x=>x.key===p)?.label || p; prodSel.appendChild(o); });
+      products.forEach(p=>{
+        const o=document.createElement("option");
+        o.value=p; o.textContent=ALL_PRODUCTS.find(x=>x.key===p)?.label || p;
+        prodSel.appendChild(o);
+      });
 
       function refresh(){
         const p=prodSel.value; const sub=avail.filter(r=>r.product===p);
@@ -573,13 +539,13 @@ document.addEventListener("click", (e) => {
         uniq(sub.map(r=>r.duration_code)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;durSel.appendChild(o);});
       }
       if(products.length){ prodSel.value=products[0]; refresh(); }
-      prodSel.addEventListener("change", refresh, { once:true });
+      prodSel.addEventListener("change", refresh);
 
-      // when category select changes, rebuild options
-      catSel?.addEventListener("change", adminFillFormOptions, { once:true });
+      catSel?.addEventListener("change", adminFillFormOptions);
     }
 
     async function adminGetAccount(){
+      if(!supabase) return alert("Missing Supabase config.");
       const product=$("#productSelectAdmin")?.value,
             type=$("#typeSelectAdmin")?.value,
             duration=$("#durSelectAdmin")?.value;
@@ -612,6 +578,7 @@ document.addEventListener("click", (e) => {
     }
 
     async function adminRenderMySales(){
+      if(!supabase) return;
       const tbody=$("#adminRecordsTable tbody"); if(!tbody) return;
       tbody.innerHTML = `<tr><td colspan="6">Loading…</td></tr>`;
       try{
@@ -626,7 +593,7 @@ document.addEventListener("click", (e) => {
             <td>${r.account_type ?? ""}</td>
             <td>${fmtDT(r.created_at)}</td>
             <td>${fmtDT(r.expires_at)}</td>
-            <td><button class="btn-outline btnEditRec">Edit</button></td>
+            <td><button class="btn-outline btnEditRec" type="button">Edit</button></td>
           </tr>`).join("");
 
         $$(".btnEditRec", tbody).forEach(b=>b.addEventListener("click", async ()=>{
@@ -650,7 +617,7 @@ document.addEventListener("click", (e) => {
       await adminRenderMySales();
     }
 
-    // ---------- UI wiring + routing
+    // ---------- View routing
     function showOwner(){
       if(getRole()!=="owner"){ alert("Owners only."); return; }
       $("#viewLogin")?.classList.add("hidden");
@@ -672,29 +639,23 @@ document.addEventListener("click", (e) => {
       $("#viewAdmin")?.classList.add("hidden");
     }
 
-    // ensure “Continue” buttons are not submit
-    ["#continueOwner","#continueAdmin","#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge","#btnAddRecord","#getAccountBtn"]
-      .forEach(sel => { const el=$(sel); if(el) el.type="button"; });
+    // Continue buttons
+    const btnContOwner = $("#continueOwner");
+    const btnContAdmin = $("#continueAdmin");
 
-    // login buttons
-    const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
-    const cardOwner=$("#ownerLoginCard"), cardAdmin=$("#adminLoginCard");
-    const inputOwner=$("#ownerUuid"), inputAdmin=$("#adminUuid");
-
-    btnOwner?.addEventListener("click",()=>{ cardAdmin?.classList.add("hidden"); cardOwner?.classList.remove("hidden"); inputOwner?.focus(); });
-    btnAdmin?.addEventListener("click",()=>{ cardOwner?.classList.add("hidden"); cardAdmin?.classList.remove("hidden"); inputAdmin?.focus(); });
-
-    document.addEventListener("click",(e)=>{
-      const t=e.target.closest("#continueOwner,#continueAdmin"); if(!t) return; e.preventDefault();
-      if(t.id==="continueOwner"){
-        const id=(inputOwner?.value||"").trim();
-        if(!isOwner(id)) return alert("UUID is not an Owner ID.");
-        setSess("owner", id); showOwner(); ownerRenderStocks(); ownerRenderRecords();
-      }else{
-        const id=(inputAdmin?.value||"").trim();
-        if(!(isOwner(id)||isAdmin(id))) return alert("UUID is not an Admin ID.");
-        setSess("admin", id); showAdmin(); adminRefreshAll();
-      }
+    btnContOwner?.addEventListener("click", (e)=>{
+      e.preventDefault();
+      const id=(inputOwner?.value||"").trim();
+      if(!isOwner(id)) return alert("UUID is not an Owner ID.");
+      setSess("owner", id);
+      showOwner(); ownerRenderStocks(); ownerRenderRecords();
+    });
+    btnContAdmin?.addEventListener("click", (e)=>{
+      e.preventDefault();
+      const id=(inputAdmin?.value||"").trim();
+      if(!(isOwner(id)||isAdmin(id))) return alert("UUID is not an Admin ID.");
+      setSess("admin", id);
+      showAdmin(); adminRefreshAll();
     });
 
     // top nav + owner tabs
@@ -711,6 +672,7 @@ document.addEventListener("click", (e) => {
       $("#"+target)?.classList.remove("hidden");
     }));
 
+    // owner/admin buttons
     $("#btnOwnerRefresh")?.addEventListener("click", ownerRenderStocks);
     $("#btnOwnerPurge")?.addEventListener("click", ownerPurgeExpired);
     $("#chkShowArchived")?.addEventListener("change", ownerRenderStocks);
@@ -718,7 +680,7 @@ document.addEventListener("click", (e) => {
     $("#btnAddRecord")?.addEventListener("click", ownerAddRecord);
     $("#getAccountBtn")?.addEventListener("click", adminGetAccount);
 
-    // auto-view based on session
+    // 4) Restore session
     const r=getRole(), u=getUid();
     if(r && u){
       if(r==="owner"){ showOwner(); ownerRenderStocks(); ownerRenderRecords(); }
@@ -727,7 +689,7 @@ document.addEventListener("click", (e) => {
       showLogin();
     }
 
-    // prime options finally
+    // 5) Prime dropdowns
     await primeOptions();
   }
 
