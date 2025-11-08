@@ -1,9 +1,9 @@
-/* app.js — AiaxStock (v2025-11-07.2+ “login failsafe + categories”) */
+/* app.js — AiaxStock (v2025-11-08.22) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
   const $$ = (s, el=document) => [...el.querySelectorAll(s)];
-  const uniq = (a) => [...new Set(a)];
+  const uniq = a => [...new Set(a)];
 
   // ── runtime helpers
   const norm = s => (s||"").replace(/\s+/g,"").toLowerCase();
@@ -28,28 +28,6 @@
     return 0;
   };
 
-  /* ────────────────────────────────────────────────────────────
-   * FAILSAFE #1: make all action buttons act as type="button"
-   * ──────────────────────────────────────────────────────────── */
-  document.addEventListener("DOMContentLoaded", () => {
-    [
-      "#btnLoginOwner","#btnLoginAdmin",
-      "#continueOwner","#continueAdmin",
-      "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
-      "#btnAddRecord","#getAccountBtn"
-    ].forEach(sel => { const el = $(sel); if (el) el.type = "button"; });
-  });
-
-  /* ────────────────────────────────────────────────────────────
-   * FAILSAFE #2: login buttons toggle cards even if boot() fails
-   * ──────────────────────────────────────────────────────────── */
-  document.addEventListener("click",(e)=>{
-    const id = e.target?.id;
-    if(id==="btnLoginOwner"){ e.preventDefault(); $("#adminLoginCard")?.classList.add("hidden"); $("#ownerLoginCard")?.classList.remove("hidden"); $("#ownerUuid")?.focus(); }
-    if(id==="btnLoginAdmin"){ e.preventDefault(); $("#ownerLoginCard")?.classList.add("hidden"); $("#adminLoginCard")?.classList.remove("hidden"); $("#adminUuid")?.focus(); }
-  });
-
-  // ── boot
   async function boot(){
     const APP = window.APP || {};
     if (!APP.url || !APP.key) { alert("Missing config.js"); return; }
@@ -57,10 +35,9 @@
     const isOwner = uid => norm(uid) === norm(APP.ownerId);
     const isAdmin = uid => (APP.admins||[]).map(norm).includes(norm(uid));
 
-    // keep these BEFORE any use
-    let ALL_PRODUCTS = [];    // from loadProducts()
-    let ADMIN_AVAIL  = [];    // optional cache (reserved)
-    let CUR_CAT      = null;
+    // shared state
+    let ALL_PRODUCTS = [];   // [{key,label,category}]
+    let CUR_CAT = null;      // chips filter (null = All)
 
     // ---------- OPTIONS (products, types, durations)
     const fillSelect = (sel, items) => {
@@ -83,8 +60,9 @@
           .select("key,label,category")
           .order("label");
         if (error) throw error;
-        if (data?.length) return data; // [{key,label,category}]
+        if (data?.length) return data;
       } catch {}
+      // fallback from APP.PRODUCTS -> default category 'Entertainment'
       return (APP.PRODUCTS || []).map(x =>
         typeof x === "string" ? { key: x.toLowerCase(), label: x, category: "Entertainment" } : x
       );
@@ -98,7 +76,7 @@
       return APP.DURATIONS || [];
     }
 
-    // chips UI
+    // ---------- Category CHIPS (for table + form cascade)
     function buildCatBar(){
       const bar = $("#catBar"); if(!bar || !ALL_PRODUCTS.length) return;
       const cats = uniq(ALL_PRODUCTS.map(p => p.category || "Uncategorized"));
@@ -107,7 +85,7 @@
         const b = e.target.closest(".chip"); if(!b) return;
         CUR_CAT = b.dataset.cat === "All" ? null : b.dataset.cat;
         $$("#catBar .chip").forEach(x=>x.classList.toggle("active", x===b));
-        adminRefreshAll(); // re-render and refill form
+        adminRefreshAll(); // re-render table & refill form selects
       });
       $$("#catBar .chip")[0]?.classList.add("active");
     }
@@ -118,15 +96,16 @@
     }
 
     async function primeOptions(){
-      // initial placeholders
+      // placeholders
       fillSelect("#productSelectOwner",[["Loading…",""]]);
       fillSelect("#typeSelectOwner", APP.ACCOUNT_TYPES || []);
       fillSelect("#durSelectOwner",  APP.DURATIONS || []);
       fillSelect("#productSelectAdmin",[["Loading…",""]]);
       fillSelect("#typeSelectAdmin",  []);
       fillSelect("#durSelectAdmin",   []);
+      fillSelect("#catSelectAdmin",   []);
 
-      // fetch once
+      // fetch & cache
       const [prods, types, durs] = await Promise.all([loadProducts(), loadAccountTypes(), loadDurations()]);
       ALL_PRODUCTS = prods;
       buildCatBar();
@@ -136,8 +115,12 @@
       if (types.length) fillSelect("#typeSelectOwner", types);
       if (durs.length)  fillSelect("#durSelectOwner",  durs);
 
-      // admin selects (cascades will be filled from availability later)
-      await adminFillFormOptions(); // uses availability + category
+      // admin “Get Account” category dropdown (independent from chips)
+      const cats = uniq(ALL_PRODUCTS.map(r=>r.category || "Uncategorized"));
+      fillSelect("#catSelectAdmin", ["All", ...cats].map(c=>[c,c]));
+
+      // initial fill for product/type/dur based on availability
+      await adminFillFormOptions();
     }
 
     // ---------- OWNER: add stock
@@ -290,7 +273,7 @@
     async function ownerAddRecord(){
       const product = $("#recProduct")?.value.trim();
       const account_type = $("#recType")?.value.trim();
-      const expires_in_ui = $("#recExpires")?.value.trim(); // optional direct datetime
+      const expires_in_ui = $("#recExpires")?.value.trim();
       const buyer_link = $("#recBuyer")?.value.trim() || null;
       const priceStr   = $("#recPrice")?.value.trim() || "";
       const withWarranty = $("#recWarranty")?.checked || false;
@@ -474,7 +457,7 @@
         if(error) throw error;
         if(data?.length) return data;
       } catch{}
-      // fallback: aggregate directly from stocks
+      // fallback
       const {data,error} = await supabase
         .from("stocks")
         .select("product,account_type,duration_code,quantity,archived")
@@ -502,14 +485,25 @@
     }
 
     async function adminFillFormOptions(){
-      const prodSel=$("#productSelectAdmin"), typeSel=$("#typeSelectAdmin"), durSel=$("#durSelectAdmin");
+      const catSel  = $("#catSelectAdmin");
+      const prodSel = $("#productSelectAdmin");
+      const typeSel = $("#typeSelectAdmin");
+      const durSel  = $("#durSelectAdmin");
       if(!prodSel||!typeSel||!durSel) return;
 
+      // availability filtered by CHIPS (CUR_CAT)
       const avail = filterAvailByCat(await adminAvailable());
-      const products=uniq(avail.map(r=>r.product));
+
+      // category dropdown affects product list inside “Get Account” form only
+      const formCat = (catSel?.value && catSel.value !== "All") ? catSel.value : null;
+      const allowedKeys = new Set(
+        (formCat ? ALL_PRODUCTS.filter(p=>(p.category||"Uncategorized")===formCat) : ALL_PRODUCTS).map(p=>p.key)
+      );
+
+      const products = uniq(avail.map(r=>r.product).filter(k=>allowedKeys.has(k)));
 
       prodSel.innerHTML = "";
-      products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; prodSel.appendChild(o); });
+      products.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=ALL_PRODUCTS.find(x=>x.key===p)?.label || p; prodSel.appendChild(o); });
 
       function refresh(){
         const p=prodSel.value; const sub=avail.filter(r=>r.product===p);
@@ -518,7 +512,10 @@
         uniq(sub.map(r=>r.duration_code)).forEach(v=>{const o=document.createElement("option");o.value=o.textContent=v;durSel.appendChild(o);});
       }
       if(products.length){ prodSel.value=products[0]; refresh(); }
-      prodSel.addEventListener("change", refresh);
+      prodSel.addEventListener("change", refresh, { once:true });
+
+      // when category select changes, rebuild options
+      catSel?.addEventListener("change", adminFillFormOptions, { once:true });
     }
 
     async function adminGetAccount(){
@@ -529,7 +526,7 @@
       const admin_uuid=getUid(); if(!admin_uuid) return alert("Session missing. Please re-login.");
 
       setLoading(true);
-      let res = await supabase.rpc("get_account_v2", {
+      const res = await supabase.rpc("get_account_v2", {
         p_admin: admin_uuid,
         p_product: product,
         p_type: type,
@@ -614,7 +611,11 @@
       $("#viewAdmin")?.classList.add("hidden");
     }
 
-    // login (delegated for reliability)
+    // ensure “Continue” buttons are not submit
+    ["#continueOwner","#continueAdmin","#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge","#btnAddRecord","#getAccountBtn"]
+      .forEach(sel => { const el=$(sel); if(el) el.type="button"; });
+
+    // login buttons
     const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
     const cardOwner=$("#ownerLoginCard"), cardAdmin=$("#adminLoginCard");
     const inputOwner=$("#ownerUuid"), inputAdmin=$("#adminUuid");
