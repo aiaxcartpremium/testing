@@ -9,6 +9,68 @@
   <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script defer src="config.js?v=11"></script>
   <script defer src="app.js?v=23"></script>
+  <script>
+/* ultra-failsafe: always enable login buttons even if app.js/config fails */
+(function () {
+  function $(s, el){ return (el||document).querySelector(s); }
+  function show(el){ el && el.classList.remove('hidden'); }
+  function hide(el){ el && el.classList.add('hidden'); }
+  function N(s){ return (s||'').replace(/\s+/g,'').toLowerCase(); }
+
+  // bind toggles
+  var btnOwner   = document.getElementById('btnLoginOwner');
+  var btnAdmin   = document.getElementById('btnLoginAdmin');
+  var cardOwner  = document.getElementById('ownerLoginCard');
+  var cardAdmin  = document.getElementById('adminLoginCard');
+  var inputOwner = document.getElementById('ownerUuid');
+  var inputAdmin = document.getElementById('adminUuid');
+
+  if (btnOwner) btnOwner.type = 'button';
+  if (btnAdmin) btnAdmin.type = 'button';
+
+  btnOwner && btnOwner.addEventListener('click', function(e){
+    e.preventDefault(); hide(cardAdmin); show(cardOwner); inputOwner && inputOwner.focus();
+  });
+  btnAdmin && btnAdmin.addEventListener('click', function(e){
+    e.preventDefault(); hide(cardOwner); show(cardAdmin); inputAdmin && inputAdmin.focus();
+  });
+
+  // Continue fallback (gagana kahit walang Supabase)
+  var APP = (window.APP||{});
+  function isOwner(uid){ return APP.ownerId ? N(uid)===N(APP.ownerId) : false; }
+  function isAdmin(uid){
+    return Array.isArray(APP.admins) && APP.admins.map(N).includes(N(uid));
+  }
+
+  var btnCO = document.getElementById('continueOwner');
+  var btnCA = document.getElementById('continueAdmin');
+  if (btnCO) btnCO.type = 'button';
+  if (btnCA) btnCA.type = 'button';
+
+  btnCO && btnCO.addEventListener('click', function(e){
+    e.preventDefault();
+    var id = (inputOwner && inputOwner.value || '').trim();
+    if (!isOwner(id)) { alert('UUID is not an Owner ID.'); return; }
+    sessionStorage.setItem('aiax.role','owner');
+    sessionStorage.setItem('aiax.uid', id);
+    // show owner view if app.js routing failed
+    document.getElementById('viewLogin')?.classList.add('hidden');
+    document.getElementById('viewAdmin')?.classList.add('hidden');
+    document.getElementById('viewOwner')?.classList.remove('hidden');
+  });
+
+  btnCA && btnCA.addEventListener('click', function(e){
+    e.preventDefault();
+    var id = (inputAdmin && inputAdmin.value || '').trim();
+    if (!(isOwner(id) || isAdmin(id))) { alert('UUID is not an Admin ID.'); return; }
+    sessionStorage.setItem('aiax.role','admin');
+    sessionStorage.setItem('aiax.uid', id);
+    document.getElementById('viewLogin')?.classList.add('hidden');
+    document.getElementById('viewOwner')?.classList.add('hidden');
+    document.getElementById('viewAdmin')?.classList.remove('hidden');
+  });
+})();
+</script>
 </head>
 <body>
   <div class="loading-overlay hidden">Loading…</div>
