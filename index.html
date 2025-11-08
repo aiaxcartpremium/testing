@@ -8,7 +8,7 @@
   <!-- libs + config + app -->
   <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script defer src="config.js?v=11"></script>
-  <script defer src="app.js?v=31"></script>
+  <script defer src="app.js?v=23"></script>
 </head>
 <body>
   <div class="loading-overlay hidden">Loading…</div>
@@ -49,8 +49,8 @@
     <div class="topbar">
       <h1>AiaxStock Management — Owner</h1>
       <div class="toolbar">
-        <button id="goToAdmin" type="button" class="btn btn-ghost">Go to Admin</button>
-        <button type="button" class="btn btn-secondary btnLogout">Logout</button>
+        <button id="goToAdmin" class="btn btn-ghost">Go to Admin</button>
+        <button class="btn btn-secondary btnLogout" type="button">Logout</button>
       </div>
     </div>
 
@@ -63,50 +63,28 @@
     <!-- Add Stock -->
     <div id="tabAdd" class="tab-page">
       <div class="grid-2">
-        <label>Product
-          <select id="productSelectOwner"></select>
-        </label>
-        <label>Account type
-          <select id="typeSelectOwner"></select>
-        </label>
-        <label>Duration
-          <select id="durSelectOwner"></select>
-        </label>
-        <label>Quantity
-          <input id="oaQty" type="number" value="1" min="1" />
-        </label>
+        <label>Product <select id="productSelectOwner"></select></label>
+        <label>Account type <select id="typeSelectOwner"></select></label>
+        <label>Duration <select id="durSelectOwner"></select></label>
+        <label>Quantity <input id="oaQty" type="number" value="1" min="1" /></label>
       </div>
 
       <div class="grid-2">
-        <label>Email (optional)
-          <input id="oaEmail" placeholder="login email" />
-        </label>
-        <label>Password (optional)
-          <input id="oaPass" placeholder="login password" />
-        </label>
-        <label>Profile (optional)
-          <input id="oaProfile" placeholder="profile name" />
-        </label>
-        <label>PIN (optional)
-          <input id="oaPin" placeholder="profile pin" />
-        </label>
+        <label>Email (optional) <input id="oaEmail" /></label>
+        <label>Password (optional) <input id="oaPass" /></label>
+        <label>Profile (optional) <input id="oaProfile" /></label>
+        <label>PIN (optional) <input id="oaPin" /></label>
       </div>
 
       <div class="grid-2">
-        <label>Premiumed at (optional)
-          <input id="oaPremiumedAt" type="datetime-local" />
-        </label>
-        <label>Auto-archive if unsold (days, optional)
-          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5" />
-        </label>
+        <label>Premiumed at (optional) <input id="oaPremiumedAt" type="datetime-local" /></label>
+        <label>Auto-archive if unsold (days) <input id="oaAutoExpireDays" type="number" min="1" /></label>
       </div>
 
-      <label>Notes
-        <input id="oaNotes" placeholder="any notes" />
-      </label>
+      <label>Notes <input id="oaNotes" placeholder="any notes" /></label>
 
       <div class="actions">
-        <button id="oaAddBtn" type="button" class="btn btn-primary">Add Stock</button>
+        <button id="oaAddBtn" class="btn btn-primary" type="button">Add Stock</button>
       </div>
     </div>
 
@@ -115,21 +93,15 @@
       <div class="row between">
         <h2>Current Stocks</h2>
         <div class="row" style="gap:8px">
-          <button id="btnOwnerRefresh" type="button" class="btn btn-outline">Refresh</button>
-          <button id="btnOwnerPurge" type="button" class="btn btn-outline">Auto-Archive Now</button>
-          <label class="checkline">
-            <input id="chkShowArchived" type="checkbox" />
-            <span class="muted">show archived</span>
-          </label>
+          <button id="btnOwnerRefresh" class="btn btn-outline" type="button">Refresh</button>
+          <button id="btnOwnerPurge" class="btn btn-outline" type="button">Auto-Archive Now</button>
+          <label class="chk"><input id="chkShowArchived" type="checkbox" /> <span class="muted">show archived</span></label>
         </div>
       </div>
       <div class="table-wrap">
         <table class="table" id="ownerStocksTable">
           <thead>
-            <tr>
-              <th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
-              <th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th>
-            </tr>
+            <tr><th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th><th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -139,51 +111,36 @@
     <!-- Records -->
     <div id="tabRecords" class="tab-page hidden">
       <h2>Sales / Buyer Records</h2>
-
       <div class="card" style="margin-bottom:12px">
         <div class="grid-3">
-          <label>Product
-            <input id="recProduct" placeholder="e.g., Netflix" />
-          </label>
-          <label>Account type
-            <input id="recType" placeholder="e.g., shared profile" />
-          </label>
-          <label>Expires at (optional)
-            <input id="recExpires" type="datetime-local" />
-          </label>
+          <label>Product <input id="recProduct" placeholder="e.g., Netflix" /></label>
+          <label>Account type <input id="recType" placeholder="e.g., shared profile" /></label>
+          <label>Expires at (optional) <input id="recExpires" type="datetime-local" /></label>
         </div>
         <div class="grid-3">
-          <label>Buyer link (optional)
-            <input id="recBuyer" placeholder="link or handle" />
-          </label>
-          <label>Price (optional)
-            <input id="recPrice" type="number" step="0.01" placeholder="0.00" />
-          </label>
-          <label class="warranty">
-            <input id="recWarranty" type="checkbox" />
-            <span>With warranty</span>
-            <input id="recExtraDays" type="number" min="0" placeholder="+ days" />
+          <label>Buyer link (optional) <input id="recBuyer" /></label>
+          <label>Price (optional) <input id="recPrice" type="number" step="0.01" /></label>
+          <label style="display:flex;align-items:center;gap:10px;margin-top:22px">
+            <input id="recWarranty" type="checkbox" /><span>With warranty</span>
+            <input id="recExtraDays" type="number" min="0" placeholder="+ days" style="max-width:120px" />
           </label>
         </div>
         <div class="actions">
-          <button id="btnAddRecord" type="button" class="btn btn-primary">Add Record</button>
+          <button id="btnAddRecord" class="btn btn-primary" type="button">Add Record</button>
         </div>
       </div>
 
       <div class="table-wrap">
         <table class="table" id="ownerRecordsTable">
           <thead>
-            <tr>
-              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th>
-              <th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th>
-            </tr>
+            <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th></tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
 
       <div class="actions">
-        <button id="btnExportCSV" type="button" class="btn btn-outline">Export CSV</button>
+        <button id="btnExportCSV" class="btn btn-outline" type="button">Export CSV</button>
       </div>
     </div>
   </section>
@@ -193,8 +150,8 @@
     <div class="topbar">
       <h1>AiaxStock Management — Admin</h1>
       <div class="toolbar">
-        <button id="goToOwner" type="button" class="btn btn-ghost">Go to Owner</button>
-        <button type="button" class="btn btn-secondary btnLogout">Logout</button>
+        <button id="goToOwner" class="btn btn-ghost" type="button">Go to Owner</button>
+        <button class="btn btn-secondary btnLogout" type="button">Logout</button>
       </div>
     </div>
 
@@ -209,21 +166,13 @@
 
     <h2>Get Account</h2>
     <div class="grid-3">
-      <label>Category
-        <select id="catSelectAdmin"></select>
-      </label>
-      <label>Product
-        <select id="productSelectAdmin"></select>
-      </label>
-      <label>Account type
-        <select id="typeSelectAdmin"></select>
-      </label>
-      <label>Duration
-        <select id="durSelectAdmin"></select>
-      </label>
+      <label>Category <select id="catSelectAdmin"></select></label>
+      <label>Product <select id="productSelectAdmin"></select></label>
+      <label>Account type <select id="typeSelectAdmin"></select></label>
+      <label>Duration <select id="durSelectAdmin"></select></label>
     </div>
     <div class="actions">
-      <button id="getAccountBtn" type="button" class="btn btn-primary">Get Account</button>
+      <button id="getAccountBtn" class="btn btn-primary" type="button">Get Account</button>
     </div>
 
     <div id="adminCreds"></div>
@@ -236,5 +185,7 @@
       </table>
     </div>
   </section>
+
+  <noscript>Enable JavaScript to use this app.</noscript>
 </body>
 </html>
