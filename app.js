@@ -1,4 +1,4 @@
-/* app.js — AiaxStock (v2025-11-07.2 “admin categories + owner records, fixed order”) */
+/* app.js — AiaxStock (v2025-11-07.2+ “login failsafe + categories”) */
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
@@ -28,6 +28,27 @@
     return 0;
   };
 
+  /* ────────────────────────────────────────────────────────────
+   * FAILSAFE #1: make all action buttons act as type="button"
+   * ──────────────────────────────────────────────────────────── */
+  document.addEventListener("DOMContentLoaded", () => {
+    [
+      "#btnLoginOwner","#btnLoginAdmin",
+      "#continueOwner","#continueAdmin",
+      "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
+      "#btnAddRecord","#getAccountBtn"
+    ].forEach(sel => { const el = $(sel); if (el) el.type = "button"; });
+  });
+
+  /* ────────────────────────────────────────────────────────────
+   * FAILSAFE #2: login buttons toggle cards even if boot() fails
+   * ──────────────────────────────────────────────────────────── */
+  document.addEventListener("click",(e)=>{
+    const id = e.target?.id;
+    if(id==="btnLoginOwner"){ e.preventDefault(); $("#adminLoginCard")?.classList.add("hidden"); $("#ownerLoginCard")?.classList.remove("hidden"); $("#ownerUuid")?.focus(); }
+    if(id==="btnLoginAdmin"){ e.preventDefault(); $("#ownerLoginCard")?.classList.add("hidden"); $("#adminLoginCard")?.classList.remove("hidden"); $("#adminUuid")?.focus(); }
+  });
+
   // ── boot
   async function boot(){
     const APP = window.APP || {};
@@ -38,7 +59,7 @@
 
     // keep these BEFORE any use
     let ALL_PRODUCTS = [];    // from loadProducts()
-    let ADMIN_AVAIL  = [];    // optional cache
+    let ADMIN_AVAIL  = [];    // optional cache (reserved)
     let CUR_CAT      = null;
 
     // ---------- OPTIONS (products, types, durations)
@@ -593,15 +614,7 @@
       $("#viewAdmin")?.classList.add("hidden");
     }
 
-    // Make sure these are not submit buttons
-    [
-      "#btnLoginOwner","#btnLoginAdmin",
-      "#continueOwner","#continueAdmin",
-      "#oaAddBtn","#btnOwnerRefresh","#btnOwnerPurge",
-      "#btnAddRecord","#getAccountBtn"
-    ].forEach(sel => { const el = $(sel); if (el) el.type = "button"; });
-
-    // login
+    // login (delegated for reliability)
     const btnOwner=$("#btnLoginOwner"), btnAdmin=$("#btnLoginAdmin");
     const cardOwner=$("#ownerLoginCard"), cardAdmin=$("#adminLoginCard");
     const inputOwner=$("#ownerUuid"), inputAdmin=$("#adminUuid");
