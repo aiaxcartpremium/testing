@@ -248,6 +248,76 @@
     </div>
   </section>
 
-  <noscript>Enable JavaScript to use this app.</noscript>
+    <noscript>Enable JavaScript to use this app.</noscript>
+
+  <!-- 🔥 Failsafe Fix: force clickable buttons -->
+  <style>
+    .hidden { display: none !important; }
+    .loading-overlay { pointer-events: none !important; }
+  </style>
+
+  <script>
+  (function () {
+    window.onerror = function (m, s, l, c, e) {
+      alert("JS error:\n" + (m||"") + "\n" + (s||"") + ":" + (l||""));
+    };
+
+    function $(id){ return document.getElementById(id); }
+    function show(el){ el && el.classList.remove('hidden'); }
+    function hide(el){ el && el.classList.add('hidden'); }
+    function N(s){ return (s||'').replace(/\s+/g,'').toLowerCase(); }
+
+    // make sure buttons don't submit any form
+    document.querySelectorAll('form').forEach(f=>{
+      f.addEventListener('submit', e=>e.preventDefault());
+    });
+
+    // force button type
+    ['btnLoginOwner','btnLoginAdmin','continueOwner','continueAdmin']
+      .forEach(id => { var b=$(id); if (b) b.type='button'; });
+
+    var btnOwner   = $('btnLoginOwner');
+    var btnAdmin   = $('btnLoginAdmin');
+    var cardOwner  = $('ownerLoginCard');
+    var cardAdmin  = $('adminLoginCard');
+    var inputOwner = $('ownerUuid');
+    var inputAdmin = $('adminUuid');
+
+    btnOwner && btnOwner.addEventListener('click', function(e){
+      e.preventDefault(); hide(cardAdmin); show(cardOwner); inputOwner && inputOwner.focus();
+    });
+    btnAdmin && btnAdmin.addEventListener('click', function(e){
+      e.preventDefault(); hide(cardOwner); show(cardAdmin); inputAdmin && inputAdmin.focus();
+    });
+
+    var APP = (window.APP||{});
+    function isOwner(uid){ return APP.ownerId ? N(uid)===N(APP.ownerId) : false; }
+    function isAdmin(uid){ return Array.isArray(APP.admins) && APP.admins.map(N).includes(N(uid)); }
+
+    $('continueOwner') && $('continueOwner').addEventListener('click', function(e){
+      e.preventDefault();
+      var id = (inputOwner && inputOwner.value || '').trim();
+      if (!isOwner(id)) { alert('UUID is not an Owner ID.'); return; }
+      sessionStorage.setItem('aiax.role','owner');
+      sessionStorage.setItem('aiax.uid', id);
+      $('viewLogin')?.classList.add('hidden');
+      $('viewAdmin')?.classList.add('hidden');
+      $('viewOwner')?.classList.remove('hidden');
+      alert('Logged in as Owner ✅');
+    });
+
+    $('continueAdmin') && $('continueAdmin').addEventListener('click', function(e){
+      e.preventDefault();
+      var id = (inputAdmin && inputAdmin.value || '').trim();
+      if (!(isOwner(id) || isAdmin(id))) { alert('UUID is not an Admin ID.'); return; }
+      sessionStorage.setItem('aiax.role','admin');
+      sessionStorage.setItem('aiax.uid', id);
+      $('viewLogin')?.classList.add('hidden');
+      $('viewOwner')?.classList.add('hidden');
+      $('viewAdmin')?.classList.remove('hidden');
+      alert('Logged in as Admin ✅');
+    });
+  })();
+  </script>
 </body>
 </html>
