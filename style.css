@@ -1,71 +1,60 @@
-:root { --bg:#0f1115; --card:#141823; --text:#eef1f7; --muted:#98a2b3; --pri:#6ea8fe; --pri-2:#3d7bfd; --line:#222733; }
-* { box-sizing:border-box; }
-html,body { margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif; color:var(--text); background:var(--bg); }
-.container { max-width:1100px; margin:24px auto; padding:0 16px; }
-h1,h2 { margin:0 0 12px; }
-p { color:var(--muted); }
-
-.hidden { display:none !important; }
-
-/* ⬇️ FORCE overlay to never block clicks when hidden */
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;          /* nasa ibabaw kapag visible */
-  background: rgba(15,21,32,.35);
-  display: none;          /* default OFF */
+/* RESET & BASE */
+* { box-sizing: border-box; }
+body {
+  margin:0; padding:0;
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  background:#0f1520; color:#e7e9ee;
 }
-.loading-overlay.hidden {
-  display: none !important;  /* kapag may .hidden → totally gone */
-  pointer-events: none !important;
+.container { max-width:1000px; margin:30px auto; padding:0 16px; }
+.hidden { display:none!important; }
+.muted { color:#97a1b0; }
+
+/* BUTTONS */
+.btn { padding:10px 14px; border-radius:10px; border:1px solid transparent; cursor:pointer; font-weight:600; }
+.btn-primary { background:#5a8cff; color:#0f1520; }
+.btn-secondary { background:#2b3648; color:#e7e9ee; }
+.btn-outline { background:transparent; border-color:#2f3c52; color:#e7e9ee; }
+.btn-ghost { background:transparent; color:#e7e9ee; }
+
+/* LAYOUT */
+.login-columns { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.login-card { padding:16px; border:1px solid #263144; border-radius:14px; background:#111b2a; }
+.account-details { margin-top:10px; padding:12px; border-radius:12px; background:#0f1724; border:1px dashed #2a3953; }
+label { display:flex; flex-direction:column; gap:6px; }
+input, select { background:#0c1320; color:#e7e9ee; border:1px solid #27334a; border-radius:10px; padding:10px 12px; outline:none; }
+
+/* TABLE */
+.table-wrap { overflow:auto; border:1px solid #223048; border-radius:12px; margin-top:10px; }
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { padding:10px 12px; border-bottom:1px solid #1f2a41; }
+.table th { text-align:left; color:#9fb0cc; }
+
+/* TOAST */
+.toast {
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+  background:#18263d; color:#e7e9ee; padding:10px 14px; border-radius:10px;
+  border:1px solid #2a3953; opacity:0; transition:opacity .2s; z-index:60;
 }
-.toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#111; color:#fff; padding:8px 12px; border-radius:6px; opacity:0; pointer-events:none; transition:opacity .2s; z-index:9999; }
 .toast.show { opacity:1; }
 
-.login-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
-.login-card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
-.account-details { margin-top:12px; display:grid; gap:10px; }
-.account-details input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:#0c0f15; color:var(--text); }
-.actions { margin-top:10px; }
+/* OVERLAY */
+.loading-overlay {
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(15,21,32,.35);
+  display:none;
+}
+.loading-overlay.hidden {
+  display:none!important;
+  pointer-events:none!important;
+}
+.spinner {
+  width:28px; height:28px; border:3px solid #2b3953;
+  border-top-color:#5a8cff; border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
 
-.btn { cursor:pointer; border:1px solid transparent; padding:10px 14px; border-radius:8px; font-weight:600; }
-.btn:disabled { opacity:.6; cursor:not-allowed; }
-.btn-primary { background:var(--pri); color:#031430; }
-.btn-secondary { background:#2b3345; color:#fff; }
-.btn-ghost { background:transparent; border-color:var(--line); color:var(--text); }
-.btn-outline { background:transparent; border-color:var(--line); color:var(--text); }
-
-.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; }
-.toolbar { display:flex; gap:8px; }
-
-.tabs { display:flex; gap:8px; margin:16px 0; }
-.tab { cursor:pointer; padding:8px 12px; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:8px; }
-.tab.active { border-color:var(--pri); box-shadow:0 0 0 2px color-mix(in srgb, var(--pri) 30%, transparent); }
-
-.grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.row { display:flex; gap:8px; align-items:center; }
-.row.between { justify-content:space-between; }
-.chk-inline { display:flex; align-items:center; gap:6px; }
-
-label { display:flex; flex-direction:column; gap:6px; font-size:14px; color:var(--muted); }
-input, select { padding:10px; border:1px solid var(--line); border-radius:8px; background:#0c0f15; color:var(--text); }
-.warranty-line { display:flex; align-items:center; gap:10px; margin-top:22px; }
-.warranty-line input[type=number] { max-width:120px; }
-
-.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
-
-.table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
-.table { width:100%; border-collapse:collapse; }
-.table th, .table td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; }
-.table th { background:#0f1420; color:#cfd6e6; }
-.muted { color:var(--muted); }
-
-.chips { display:flex; gap:8px; margin:6px 0 12px; flex-wrap:wrap; }
-.chip { padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#121827; color:var(--text); cursor:pointer; }
-.chip.active { border-color:var(--pri); }
-
+/* MOBILE */
 @media (max-width:800px){
-  .login-columns, .grid-3 { grid-template-columns:1fr; }
-  .grid-2 { grid-template-columns:1fr; }
+  .login-columns { grid-template-columns:1fr; }
 }
