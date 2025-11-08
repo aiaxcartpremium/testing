@@ -37,17 +37,27 @@
   const inputOwner = $("#ownerUuid"),
         inputAdmin = $("#adminUuid");
 
-  btnOwner?.addEventListener("click", () => {
+  // ONE handler to catch taps on either login button (works even on iOS)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("#btnLoginOwner,#btnLoginAdmin");
+  if (!b) return;
+
+  e.preventDefault();
+  const cardOwner  = $("#ownerLoginCard");
+  const cardAdmin  = $("#adminLoginCard");
+  const inputOwner = $("#ownerUuid");
+  const inputAdmin = $("#adminUuid");
+
+  if (b.id === "btnLoginOwner") {
     cardAdmin?.classList.add("hidden");
     cardOwner?.classList.remove("hidden");
     inputOwner?.focus();
-  });
-  btnAdmin?.addEventListener("click", () => {
+  } else {
     cardOwner?.classList.add("hidden");
     cardAdmin?.classList.remove("hidden");
     inputAdmin?.focus();
-  });
-
+  }
+});
   // 2) Config + Supabase (no early return)
   const APP = window.APP || {};
   if (!APP.url || !APP.key) {
