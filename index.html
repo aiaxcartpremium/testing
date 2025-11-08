@@ -2,79 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>AiaxStock Management</title>
-  <link rel="stylesheet" href="style.css?v=101">
-<script defer src="config.js?v=101"></script>
-<script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script defer src="app.js?v=101"></script> <!-- libs + config + app -->
-  
- <script>
-/* ultra-failsafe: always enable login buttons even if app.js/config fails */
-(function () {
-  function $(s, el){ return (el||document).querySelector(s); }
-  function show(el){ el && el.classList.remove('hidden'); }
-  function hide(el){ el && el.classList.add('hidden'); }
-  function N(s){ return (s||'').replace(/\s+/g,'').toLowerCase(); }
-
-  // bind toggles
-  var btnOwner   = document.getElementById('btnLoginOwner');
-  var btnAdmin   = document.getElementById('btnLoginAdmin');
-  var cardOwner  = document.getElementById('ownerLoginCard');
-  var cardAdmin  = document.getElementById('adminLoginCard');
-  var inputOwner = document.getElementById('ownerUuid');
-  var inputAdmin = document.getElementById('adminUuid');
-
-  if (btnOwner) btnOwner.type = 'button';
-  if (btnAdmin) btnAdmin.type = 'button';
-
-  btnOwner && btnOwner.addEventListener('click', function(e){
-    e.preventDefault(); hide(cardAdmin); show(cardOwner); inputOwner && inputOwner.focus();
-  });
-  btnAdmin && btnAdmin.addEventListener('click', function(e){
-    e.preventDefault(); hide(cardOwner); show(cardAdmin); inputAdmin && inputAdmin.focus();
-  });
-
-  // Continue fallback (gagana kahit walang Supabase)
-  var APP = (window.APP||{});
-  function isOwner(uid){ return APP.ownerId ? N(uid)===N(APP.ownerId) : false; }
-  function isAdmin(uid){
-    return Array.isArray(APP.admins) && APP.admins.map(N).includes(N(uid));
-  }
-
-  var btnCO = document.getElementById('continueOwner');
-  var btnCA = document.getElementById('continueAdmin');
-  if (btnCO) btnCO.type = 'button';
-  if (btnCA) btnCA.type = 'button';
-
-  btnCO && btnCO.addEventListener('click', function(e){
-    e.preventDefault();
-    var id = (inputOwner && inputOwner.value || '').trim();
-    if (!isOwner(id)) { alert('UUID is not an Owner ID.'); return; }
-    sessionStorage.setItem('aiax.role','owner');
-    sessionStorage.setItem('aiax.uid', id);
-    // show owner view if app.js routing failed
-    document.getElementById('viewLogin')?.classList.add('hidden');
-    document.getElementById('viewAdmin')?.classList.add('hidden');
-    document.getElementById('viewOwner')?.classList.remove('hidden');
-  });
-
-  btnCA && btnCA.addEventListener('click', function(e){
-    e.preventDefault();
-    var id = (inputAdmin && inputAdmin.value || '').trim();
-    if (!(isOwner(id) || isAdmin(id))) { alert('UUID is not an Admin ID.'); return; }
-    sessionStorage.setItem('aiax.role','admin');
-    sessionStorage.setItem('aiax.uid', id);
-    document.getElementById('viewLogin')?.classList.add('hidden');
-    document.getElementById('viewOwner')?.classList.add('hidden');
-    document.getElementById('viewAdmin')?.classList.remove('hidden');
-  });
-})();
-</script>
+  <link rel="stylesheet" href="style.css?v=103" />
+  <!-- libs -->
+  <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <!-- your config must define: window.APP = { url, key, ownerId, admins:[...] , PRODUCTS?, ACCOUNT_TYPES?, DURATIONS? } -->
+  <script defer src="config.js?v=11"></script>
+  <!-- app -->
+  <script defer src="app.js?v=103"></script>
 </head>
 <body>
+  <noscript><div style="padding:12px;background:#ffd3d3;color:#610">Enable JavaScript.</div></noscript>
+
   <div class="loading-overlay hidden">Loading…</div>
-  <div class="toast"></div>
+  <div class="toast" aria-live="polite"></div>
 
   <!-- LOGIN -->
   <section id="viewLogin" class="container">
@@ -111,7 +53,7 @@
     <div class="topbar">
       <h1>AiaxStock Management — Owner</h1>
       <div class="toolbar">
-        <button id="goToAdmin" class="btn btn-ghost">Go to Admin</button>
+        <button id="goToAdmin" class="btn btn-ghost" type="button">Go to Admin</button>
         <button class="btn btn-secondary btnLogout" type="button">Logout</button>
       </div>
     </div>
@@ -125,28 +67,50 @@
     <!-- Add Stock -->
     <div id="tabAdd" class="tab-page">
       <div class="grid-2">
-        <label>Product <select id="productSelectOwner"></select></label>
-        <label>Account type <select id="typeSelectOwner"></select></label>
-        <label>Duration <select id="durSelectOwner"></select></label>
-        <label>Quantity <input id="oaQty" type="number" value="1" min="1" /></label>
+        <label>Product
+          <select id="productSelectOwner"></select>
+        </label>
+        <label>Account type
+          <select id="typeSelectOwner"></select>
+        </label>
+        <label>Duration
+          <select id="durSelectOwner"></select>
+        </label>
+        <label>Quantity
+          <input id="oaQty" type="number" value="1" min="1" />
+        </label>
       </div>
 
       <div class="grid-2">
-        <label>Email (optional) <input id="oaEmail" /></label>
-        <label>Password (optional) <input id="oaPass" /></label>
-        <label>Profile (optional) <input id="oaProfile" /></label>
-        <label>PIN (optional) <input id="oaPin" /></label>
+        <label>Email (optional)
+          <input id="oaEmail" placeholder="login email" />
+        </label>
+        <label>Password (optional)
+          <input id="oaPass" placeholder="login password" />
+        </label>
+        <label>Profile (optional)
+          <input id="oaProfile" placeholder="profile name" />
+        </label>
+        <label>PIN (optional)
+          <input id="oaPin" placeholder="profile pin" />
+        </label>
       </div>
 
       <div class="grid-2">
-        <label>Premiumed at (optional) <input id="oaPremiumedAt" type="datetime-local" /></label>
-        <label>Auto-archive if unsold (days) <input id="oaAutoExpireDays" type="number" min="1" /></label>
+        <label>Premiumed at (optional)
+          <input id="oaPremiumedAt" type="datetime-local" />
+        </label>
+        <label>Auto-archive if unsold (days)
+          <input id="oaAutoExpireDays" type="number" min="1" placeholder="e.g., 5" />
+        </label>
       </div>
 
-      <label>Notes <input id="oaNotes" placeholder="any notes" /></label>
+      <label>Notes
+        <input id="oaNotes" placeholder="any notes" />
+      </label>
 
       <div class="actions">
-        <button id="oaAddBtn" class="btn btn-primary" type="button">Add Stock</button>
+        <button id="oaAddBtn" type="button" class="btn btn-primary">Add Stock</button>
       </div>
     </div>
 
@@ -155,15 +119,21 @@
       <div class="row between">
         <h2>Current Stocks</h2>
         <div class="row" style="gap:8px">
-          <button id="btnOwnerRefresh" class="btn btn-outline" type="button">Refresh</button>
-          <button id="btnOwnerPurge" class="btn btn-outline" type="button">Auto-Archive Now</button>
-          <label class="chk"><input id="chkShowArchived" type="checkbox" /> <span class="muted">show archived</span></label>
+          <button id="btnOwnerRefresh" type="button" class="btn btn-outline">Refresh</button>
+          <button id="btnOwnerPurge" type="button" class="btn btn-outline">Auto-Archive Now</button>
+          <label class="row gap6">
+            <input id="chkShowArchived" type="checkbox" />
+            <span class="muted">show archived</span>
+          </label>
         </div>
       </div>
       <div class="table-wrap">
         <table class="table" id="ownerStocksTable">
           <thead>
-            <tr><th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th><th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th></tr>
+            <tr>
+              <th>ID</th><th>Product</th><th>Type</th><th>Duration</th><th>Qty</th>
+              <th>Premiumed</th><th>Listed</th><th>Auto-Exp (d)</th><th>Archived</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -180,29 +150,31 @@
           <label>Expires at (optional) <input id="recExpires" type="datetime-local" /></label>
         </div>
         <div class="grid-3">
-          <label>Buyer link (optional) <input id="recBuyer" /></label>
-          <label>Price (optional) <input id="recPrice" type="number" step="0.01" /></label>
-          <label style="display:flex;align-items:center;gap:10px;margin-top:22px">
+          <label>Buyer link (optional) <input id="recBuyer" placeholder="link or handle" /></label>
+          <label>Price (optional) <input id="recPrice" type="number" step="0.01" placeholder="0.00" /></label>
+          <label class="row gap10" style="margin-top:22px">
             <input id="recWarranty" type="checkbox" /><span>With warranty</span>
             <input id="recExtraDays" type="number" min="0" placeholder="+ days" style="max-width:120px" />
           </label>
         </div>
         <div class="actions">
-          <button id="btnAddRecord" class="btn btn-primary" type="button">Add Record</button>
+          <button id="btnAddRecord" type="button" class="btn btn-primary">Add Record</button>
         </div>
       </div>
 
       <div class="table-wrap">
         <table class="table" id="ownerRecordsTable">
           <thead>
-            <tr><th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th></tr>
+            <tr>
+              <th>ID</th><th>Product</th><th>Type</th><th>Created</th><th>Expires</th><th>Admin</th><th>Buyer link</th><th>Price</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
 
       <div class="actions">
-        <button id="btnExportCSV" class="btn btn-outline" type="button">Export CSV</button>
+        <button id="btnExportCSV" type="button" class="btn btn-outline">Export CSV</button>
       </div>
     </div>
   </section>
@@ -229,14 +201,11 @@
     <h2>Get Account</h2>
     <div class="grid-3">
       <label>Category <select id="catSelectAdmin"></select></label>
-      <label>Product <select id="productSelectAdmin"></select></label>
+      <label>Product  <select id="productSelectAdmin"></select></label>
       <label>Account type <select id="typeSelectAdmin"></select></label>
       <label>Duration <select id="durSelectAdmin"></select></label>
     </div>
-    <div class="actions">
-      <button id="getAccountBtn" class="btn btn-primary" type="button">Get Account</button>
-    </div>
-
+    <div class="actions"><button id="getAccountBtn" type="button" class="btn btn-primary">Get Account</button></div>
     <div id="adminCreds"></div>
 
     <h2>My Buyers Record</h2>
@@ -247,77 +216,5 @@
       </table>
     </div>
   </section>
-
-    <noscript>Enable JavaScript to use this app.</noscript>
-
-  <!-- 🔥 Failsafe Fix: force clickable buttons -->
-  <style>
-    .hidden { display: none !important; }
-    .loading-overlay { pointer-events: none !important; }
-  </style>
-
-  <script>
-  (function () {
-    window.onerror = function (m, s, l, c, e) {
-      alert("JS error:\n" + (m||"") + "\n" + (s||"") + ":" + (l||""));
-    };
-
-    function $(id){ return document.getElementById(id); }
-    function show(el){ el && el.classList.remove('hidden'); }
-    function hide(el){ el && el.classList.add('hidden'); }
-    function N(s){ return (s||'').replace(/\s+/g,'').toLowerCase(); }
-
-    // make sure buttons don't submit any form
-    document.querySelectorAll('form').forEach(f=>{
-      f.addEventListener('submit', e=>e.preventDefault());
-    });
-
-    // force button type
-    ['btnLoginOwner','btnLoginAdmin','continueOwner','continueAdmin']
-      .forEach(id => { var b=$(id); if (b) b.type='button'; });
-
-    var btnOwner   = $('btnLoginOwner');
-    var btnAdmin   = $('btnLoginAdmin');
-    var cardOwner  = $('ownerLoginCard');
-    var cardAdmin  = $('adminLoginCard');
-    var inputOwner = $('ownerUuid');
-    var inputAdmin = $('adminUuid');
-
-    btnOwner && btnOwner.addEventListener('click', function(e){
-      e.preventDefault(); hide(cardAdmin); show(cardOwner); inputOwner && inputOwner.focus();
-    });
-    btnAdmin && btnAdmin.addEventListener('click', function(e){
-      e.preventDefault(); hide(cardOwner); show(cardAdmin); inputAdmin && inputAdmin.focus();
-    });
-
-    var APP = (window.APP||{});
-    function isOwner(uid){ return APP.ownerId ? N(uid)===N(APP.ownerId) : false; }
-    function isAdmin(uid){ return Array.isArray(APP.admins) && APP.admins.map(N).includes(N(uid)); }
-
-    $('continueOwner') && $('continueOwner').addEventListener('click', function(e){
-      e.preventDefault();
-      var id = (inputOwner && inputOwner.value || '').trim();
-      if (!isOwner(id)) { alert('UUID is not an Owner ID.'); return; }
-      sessionStorage.setItem('aiax.role','owner');
-      sessionStorage.setItem('aiax.uid', id);
-      $('viewLogin')?.classList.add('hidden');
-      $('viewAdmin')?.classList.add('hidden');
-      $('viewOwner')?.classList.remove('hidden');
-      alert('Logged in as Owner ✅');
-    });
-
-    $('continueAdmin') && $('continueAdmin').addEventListener('click', function(e){
-      e.preventDefault();
-      var id = (inputAdmin && inputAdmin.value || '').trim();
-      if (!(isOwner(id) || isAdmin(id))) { alert('UUID is not an Admin ID.'); return; }
-      sessionStorage.setItem('aiax.role','admin');
-      sessionStorage.setItem('aiax.uid', id);
-      $('viewLogin')?.classList.add('hidden');
-      $('viewOwner')?.classList.add('hidden');
-      $('viewAdmin')?.classList.remove('hidden');
-      alert('Logged in as Admin ✅');
-    });
-  })();
-  </script>
 </body>
 </html>
