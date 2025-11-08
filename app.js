@@ -1,4 +1,8 @@
 /* app.js — AiaxStock (v2025-11-08.3) */
+window.onerror = (m, s, l, c, e) => {
+  console.error("JS error:", m, s, l, e);
+  alert("JS error: " + m);   // pansamantalang probe
+};
 (() => {
   // ── tiny DOM helpers
   const $  = (s, el=document) => el.querySelector(s);
