@@ -181,5 +181,37 @@
       </table>
     </div>
   </section>
+  <!-- Fallback: force-bind login buttons even if app.js fails -->
+<script>
+(function () {
+  if (window.__wiredLogin) return;       // avoid double-binding
+  window.__wiredLogin = true;
+
+  const $ = (s) => document.querySelector(s);
+  const btnO = $("#btnLoginOwner");
+  const btnA = $("#btnLoginAdmin");
+  const cardO = $("#ownerLoginCard");
+  const cardA = $("#adminLoginCard");
+  const inO   = $("#ownerUuid");
+  const inA   = $("#adminUuid");
+
+  // make sure they are not "submit"
+  [btnO, btnA].forEach(b => b && (b.type = "button"));
+
+  if (btnO) btnO.addEventListener("click", (e)=>{
+    e.preventDefault();
+    cardA && cardA.classList.add("hidden");
+    cardO && cardO.classList.remove("hidden");
+    inO && inO.focus();
+  });
+
+  if (btnA) btnA.addEventListener("click", (e)=>{
+    e.preventDefault();
+    cardO && cardO.classList.add("hidden");
+    cardA && cardA.classList.remove("hidden");
+    inA && inA.focus();
+  });
+})();
+</script>
 </body>
 </html>
